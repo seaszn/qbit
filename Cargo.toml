@@ -1,0 +1,6 @@
+[workspace]
+name = "qbit"
+members = ["lang", "cli"]
+
+[workspace.dependencies]
+rhai = "1.22.2"

@@ -1,0 +1,12 @@
+[package]
+name = "qbit-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qbit-lang = { path = "../lang" }
+rhai = { workspace = true }
+
+[[bin]]
+name = "qbit-cli"
+path = "src/bin.rs"

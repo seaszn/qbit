@@ -1,0 +1,11 @@
+[package]
+name = "qbit-lang"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rhai = { workspace = true }
+
+[lib]
+name = "qbit_lang"
+path = "src/lib.rs"
