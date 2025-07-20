@@ -3,4 +3,6 @@ name = "qbit"
 members = ["lang", "cli"]
 
 [workspace.dependencies]
-rhai = "1.22.2"
+pest = "2.7"
+pest_derive = "2.7"
+thiserror = "2.0.12"

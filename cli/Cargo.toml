@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 qbit-lang = { path = "../lang" }
-rhai = { workspace = true }
 
 [[bin]]
 name = "qbit-cli"
