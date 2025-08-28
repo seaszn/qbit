@@ -1,11 +1,12 @@
 use logos::Logos;
 mod utils;
 
-use utils::{parse_float, parse_identifier, parse_int, parse_string};
+use utils::{
+    parse_block_comment, parse_float, parse_identifier, parse_int, parse_line_comment, parse_string,
+};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
-    // ===== Literals =====
     #[regex(r"[0-9]+", parse_int)]
     IntLiteral(i64),
     #[regex(r"[0-9]+\.[0-9]+", parse_float)]
@@ -16,6 +17,8 @@ pub enum Token {
     BoolFalse,
     #[regex(r#""([^"\\]|\\.)*""#, parse_string)]
     StringLiteral(String),
+    #[token("null")]
+    NullLiteral,
 
     // ===== Identifiers =====
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", parse_identifier)]
@@ -47,6 +50,11 @@ pub enum Token {
     #[token("break")]
     Break,
 
+    // ===== Comments =====
+    #[regex(r"//[^\r\n]*", parse_line_comment)]
+    LineComment(String),
+    #[regex(r"/\*(?:[^*]|\*[^/])*\*/", parse_block_comment)]
+    BlockComment(String),
 
     // ===== Operators =====
     // Basic
@@ -152,7 +160,6 @@ pub enum Token {
     // ===== Whitespace =====
     #[regex(r"[ \t\r\n]+", logos::skip)]
     Whitespace,
-
     // ===== Placeholders for future (commented) =====
     // #[token("..")] Range,
     // #[token("..=")] RangeInclusive,
@@ -160,4 +167,16 @@ pub enum Token {
     // #[token("??")] NullCoalesce,
     // #[token("|>")] Pipe,
     // #[token("...")] Ellipsis,
+}
+
+impl Token {
+    /// Check if token is a comment
+    pub fn is_comment(&self) -> bool {
+        matches!(self, Token::LineComment(_) | Token::BlockComment(_))
+    }
+
+    /// Check if token is whitespace or comment (for filtering)
+    pub fn is_trivia(&self) -> bool {
+        matches!(self, Token::LineComment(_) | Token::BlockComment(_))
+    }
 }

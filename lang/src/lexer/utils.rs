@@ -16,3 +16,15 @@ pub fn parse_string(lex: &mut logos::Lexer<'_, Token>) -> Option<String> {
 pub fn parse_identifier(lex: &mut logos::Lexer<'_, Token>) -> Option<String> {
     Some(lex.slice().to_string())
 }
+
+pub fn parse_line_comment(lex: &mut logos::Lexer<'_, Token>) -> Option<String> {
+    let s = lex.slice();
+    // Remove the // prefix
+    Some(s[2..].to_string())
+}
+
+pub fn parse_block_comment(lex: &mut logos::Lexer<'_, Token>) -> Option<String> {
+    let s = lex.slice();
+    // Remove the /* */ wrapper
+    Some(s[2..s.len() - 2].to_string())
+}

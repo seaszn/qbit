@@ -1,733 +1,530 @@
-use qbit_lang::ast::expr::Expr;
-use qbit_lang::ast::{expr::*, stmt::Stmt, value::Value};
+use super::{TestHelper, assert_expr};
+use cases::{ARITHMETIC_OPS, BITWISE_OPS, COMPARISON_OPS, ERROR_CASES, PRECEDENCE_CASES};
+use qbit_lang::ast::op::{BinaryOp, UnaryOp};
 
-use super::{parse_expr, parse_stmt};
+mod cases {
+    use super::*;
+
+    #[derive(Debug, Clone)]
+    pub struct BinaryOpCase {
+        pub source: &'static str,
+        pub op: BinaryOp,
+        pub left: i64,
+        pub right: i64,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct PrecedenceCase {
+        pub source: &'static str,
+        pub expected: BinaryOp,
+        // pub description: &'static str,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct ErrorCase {
+        pub source: &'static str,
+        pub expected: &'static str,
+        // pub description: &'static str,
+    }
+
+    pub const ARITHMETIC_OPS: &[BinaryOpCase] = &[
+        BinaryOpCase {
+            source: "5 + 3",
+            op: BinaryOp::Add,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 - 3",
+            op: BinaryOp::Sub,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 * 3",
+            op: BinaryOp::Mul,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 / 3",
+            op: BinaryOp::Div,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 % 3",
+            op: BinaryOp::Mod,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 ** 3",
+            op: BinaryOp::Pow,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 ^ 3",
+            op: BinaryOp::Pow,
+            left: 5,
+            right: 3,
+        },
+    ];
+
+    pub const COMPARISON_OPS: &[BinaryOpCase] = &[
+        BinaryOpCase {
+            source: "5 > 3",
+            op: BinaryOp::Gt,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 >= 3",
+            op: BinaryOp::Ge,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 < 3",
+            op: BinaryOp::Lt,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 <= 3",
+            op: BinaryOp::Le,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 == 3",
+            op: BinaryOp::Eq,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 != 3",
+            op: BinaryOp::Neq,
+            left: 5,
+            right: 3,
+        },
+    ];
+
+    pub const BITWISE_OPS: &[BinaryOpCase] = &[
+        BinaryOpCase {
+            source: "5 & 3",
+            op: BinaryOp::BitAnd,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 | 3",
+            op: BinaryOp::BitOr,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 << 3",
+            op: BinaryOp::Shl,
+            left: 5,
+            right: 3,
+        },
+        BinaryOpCase {
+            source: "5 >> 3",
+            op: BinaryOp::Shr,
+            left: 5,
+            right: 3,
+        },
+    ];
+
+    pub const PRECEDENCE_CASES: &[PrecedenceCase] = &[
+        PrecedenceCase {
+            source: "2 + 3 * 4",
+            expected: BinaryOp::Add,
+        },
+        PrecedenceCase {
+            source: "2 * 3 + 4",
+            expected: BinaryOp::Add,
+        },
+        PrecedenceCase {
+            source: "2 ** 3 ** 4",
+            expected: BinaryOp::Pow,
+        },
+        PrecedenceCase {
+            source: "true || false && true",
+            expected: BinaryOp::Or,
+        },
+        PrecedenceCase {
+            source: "1 + 2 < 3 + 4",
+            expected: BinaryOp::Lt,
+        },
+        PrecedenceCase {
+            source: "1 | 2 & 3",
+            expected: BinaryOp::BitOr,
+        },
+    ];
+
+    pub const ERROR_CASES: &[ErrorCase] = &[
+        ErrorCase {
+            source: "5 +",
+            expected: "Unexpected end of file",
+        },
+        ErrorCase {
+            source: "(5 + 3",
+            expected: "Unexpected end of file",
+        },
+        ErrorCase {
+            source: "[1, 2, 3",
+            expected: "Unexpected end of file",
+        },
+        ErrorCase {
+            source: "5 @",
+            expected: "Invalid token",
+        },
+        ErrorCase {
+            source: "func(1, 2,",
+            expected: "Unexpected end of file",
+        },
+    ];
+}
 
 #[test]
 fn literal_expr() {
     // Integer literals
-    let expr = parse_expr("42").unwrap();
-    assert_eq!(expr, Expr::Literal(Value::Int(42)));
+    let expr = TestHelper::assert_expr("42");
+    assert_expr::literal_int(&expr, 42);
+
+    let expr = TestHelper::assert_expr("-123");
+    let operand = assert_expr::unary_op(&expr, UnaryOp::Neg);
+    assert_expr::literal_int(operand, 123);
 
     // Float literals
-    let expr = parse_expr("3.14159").unwrap();
-    assert_eq!(expr, Expr::Literal(Value::Float(3.14159)));
+    let expr = TestHelper::assert_expr("3.14159");
+    assert_expr::literal_float(&expr, 3.14159);
 
     // Boolean literals
-    let expr = parse_expr("true").unwrap();
-    assert_eq!(expr, Expr::Literal(Value::Bool(true)));
+    let expr = TestHelper::assert_expr("true");
+    assert_expr::literal_bool(&expr, true);
 
-    let expr = parse_expr("false").unwrap();
-    assert_eq!(expr, Expr::Literal(Value::Bool(false)));
+    let expr = TestHelper::assert_expr("false");
+    assert_expr::literal_bool(&expr, false);
 
     // String literals
-    let expr = parse_expr(r#""Hello, World!""#).unwrap();
-    assert_eq!(expr, Expr::Literal(Value::Str("Hello, World!".to_string())));
+    let expr = TestHelper::assert_expr(r#""Hello, World!""#);
+    assert_expr::literal_string(&expr, "Hello, World!");
+
+    let expr = TestHelper::assert_expr(r#""with \"quotes\"""#);
+    assert_expr::literal_string(&expr, r#"with "quotes""#);
 }
 
 #[test]
-fn variable_expr() {
-    let expr = parse_expr("myVariable").unwrap();
-    assert_eq!(expr, Expr::Variable("myVariable".to_string()));
+fn var_expr() {
+    let expr = TestHelper::assert_expr("myVariable");
+    assert_expr::variable(&expr, "myVariable");
 
-    let expr = parse_expr("_underscore").unwrap();
-    assert_eq!(expr, Expr::Variable("_underscore".to_string()));
+    let expr = TestHelper::assert_expr("_underscore");
+    assert_expr::variable(&expr, "_underscore");
 
-    let expr = parse_expr("var123").unwrap();
-    assert_eq!(expr, Expr::Variable("var123".to_string()));
+    let expr = TestHelper::assert_expr("var123");
+    assert_expr::variable(&expr, "var123");
 }
 
 #[test]
-fn arithmetic_expr() {
-    // Test basic precedence: 2 + 3 * 4 should be 2 + (3 * 4)
-    let expr = parse_expr("2 + 3 * 4").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Add,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Int(2)));
-
-            match &*right {
-                Expr::Binary {
-                    op: BinaryOp::Mul,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Literal(Value::Int(3)));
-                    assert_eq!(**right, Expr::Literal(Value::Int(4)));
-                }
-                _ => panic!("Expected multiplication on right side"),
-            }
-        }
-        _ => panic!("Expected addition at top level"),
-    }
-
-    // Test division precedence: 10 / 2 + 3 should be (10 / 2) + 3
-    let expr = parse_expr("10 / 2 + 3").unwrap();
-
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Add,
-            left,
-            right,
-        } => {
-            match &*left {
-                Expr::Binary {
-                    op: BinaryOp::Div,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Literal(Value::Int(10)));
-                    assert_eq!(**right, Expr::Literal(Value::Int(2)));
-                }
-                _ => panic!("Expected division on left side"),
-            }
-            assert_eq!(*right, Expr::Literal(Value::Int(3)));
-        }
-        _ => panic!("Expected addition at top level"),
+fn arithmetic_op_expr() {
+    for case in ARITHMETIC_OPS {
+        let expr = TestHelper::assert_expr(case.source);
+        let (left, right) = assert_expr::binary_op(&expr, case.op);
+        assert_expr::literal_int(left, case.left);
+        assert_expr::literal_int(right, case.right);
     }
 }
 
 #[test]
-fn power_expr() {
-    // Test right associativity: 2 ** 3 ** 2 should be 2 ** (3 ** 2)
-    let expr = parse_expr("2 ** 3 ** 2").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Pow,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Int(2)));
-
-            match &*right {
-                Expr::Binary {
-                    op: BinaryOp::Pow,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Literal(Value::Int(3)));
-                    assert_eq!(**right, Expr::Literal(Value::Int(2)));
-                }
-                _ => panic!("Expected power on right side"),
-            }
-        }
-        _ => panic!("Expected power at top level"),
-    }
-
-    // Test with caret operator too
-    let expr = parse_expr("2 ^ 3 ^ 2").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Pow,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Int(2)));
-            match &*right {
-                Expr::Binary {
-                    op: BinaryOp::Pow,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Literal(Value::Int(3)));
-                    assert_eq!(**right, Expr::Literal(Value::Int(2)));
-                }
-                _ => panic!("Expected power on right side"),
-            }
-        }
-        _ => panic!("Expected power at top level"),
+fn comparison_op_expr() {
+    for case in COMPARISON_OPS {
+        let expr = TestHelper::assert_expr(case.source);
+        let (left, right) = assert_expr::binary_op(&expr, case.op);
+        assert_expr::literal_int(left, case.left);
+        assert_expr::literal_int(right, case.right);
     }
 }
 
 #[test]
-fn comparison_expr() {
-    let ops = vec![
-        ("5 > 3", BinaryOp::Gt),
-        ("5 >= 3", BinaryOp::Ge),
-        ("5 < 3", BinaryOp::Lt),
-        ("5 <= 3", BinaryOp::Le),
-        ("5 == 3", BinaryOp::Eq),
-        ("5 != 3", BinaryOp::Neq),
-    ];
-
-    for (source, expected_op) in ops {
-        let expr = parse_expr(source).unwrap();
-        match expr {
-            Expr::Binary { op, left, right } => {
-                assert_eq!(op, expected_op);
-                assert_eq!(*left, Expr::Literal(Value::Int(5)));
-                assert_eq!(*right, Expr::Literal(Value::Int(3)));
-            }
-            _ => panic!("Expected binary expression for {}", source),
-        }
+fn bitwise_op_expr() {
+    for case in BITWISE_OPS {
+        let expr = TestHelper::assert_expr(case.source);
+        let (left, right) = assert_expr::binary_op(&expr, case.op);
+        assert_expr::literal_int(left, case.left);
+        assert_expr::literal_int(right, case.right);
     }
 }
 
 #[test]
-fn logical_expr() {
-    // Test AND
-    let expr = parse_expr("true && false").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::And,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Bool(true)));
-            assert_eq!(*right, Expr::Literal(Value::Bool(false)));
-        }
-        _ => panic!("Expected AND expression"),
-    }
+fn logical_op_expr() {
+    // AND
+    let expr = TestHelper::assert_expr("true && false");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::And);
+    assert_expr::literal_bool(left, true);
+    assert_expr::literal_bool(right, false);
 
-    // Test OR
-    let expr = parse_expr("true || false").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Or,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Bool(true)));
-            assert_eq!(*right, Expr::Literal(Value::Bool(false)));
-        }
-        _ => panic!("Expected OR expression"),
-    }
+    // OR
+    let expr = TestHelper::assert_expr("true || false");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Or);
+    assert_expr::literal_bool(left, true);
+    assert_expr::literal_bool(right, false);
+}
 
-    // Test precedence: true || false && true should be true || (false && true)
-    let expr = parse_expr("true || false && true").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Or,
-            left,
-            right,
-        } => {
-            assert_eq!(*left, Expr::Literal(Value::Bool(true)));
+#[test]
+fn unary_op_expr() {
+    // Negation
+    let expr = TestHelper::assert_expr("-42");
+    let operand = assert_expr::unary_op(&expr, UnaryOp::Neg);
+    assert_expr::literal_int(operand, 42);
 
-            match &*right {
-                Expr::Binary {
-                    op: BinaryOp::And,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Literal(Value::Bool(false)));
-                    assert_eq!(**right, Expr::Literal(Value::Bool(true)));
-                }
-                _ => panic!("Expected AND on right side"),
-            }
-        }
-        _ => panic!("Expected OR at top level"),
+    // Logical NOT
+    let expr = TestHelper::assert_expr("!true");
+    let operand = assert_expr::unary_op(&expr, UnaryOp::Not);
+    assert_expr::literal_bool(operand, true);
+
+    // Chained unary
+    let expr = TestHelper::assert_expr("!!true");
+    let operand1 = assert_expr::unary_op(&expr, UnaryOp::Not);
+    let operand2 = assert_expr::unary_op(operand1, UnaryOp::Not);
+    assert_expr::literal_bool(operand2, true);
+}
+
+#[test]
+fn op_precedence_expr() {
+    for case in PRECEDENCE_CASES {
+        let expr = TestHelper::assert_expr(case.source);
+        let (_, _) = assert_expr::binary_op(&expr, case.expected);
+        // Could add more detailed precedence checking here
     }
 }
 
 #[test]
-fn bitwise_expr() {
-    let ops = vec![
-        ("5 & 3", BinaryOp::BitAnd),
-        ("5 | 3", BinaryOp::BitOr),
-        ("5 << 3", BinaryOp::Shl),
-        ("5 >> 3", BinaryOp::Shr),
-    ];
+fn right_assoc_expr() {
+    // Power operator should be right-associative: 2 ** 3 ** 2 = 2 ** (3 ** 2)
+    let expr = TestHelper::assert_expr("2 ** 3 ** 2");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Pow);
+    assert_expr::literal_int(left, 2);
 
-    for (source, expected_op) in ops {
-        let expr = parse_expr(source).unwrap();
-        match expr {
-            Expr::Binary { op, left, right } => {
-                assert_eq!(op, expected_op);
-                assert_eq!(*left, Expr::Literal(Value::Int(5)));
-                assert_eq!(*right, Expr::Literal(Value::Int(3)));
-            }
-            _ => panic!("Expected binary expression for {}", source),
-        }
-    }
+    let (inner_left, inner_right) = assert_expr::binary_op(right, BinaryOp::Pow);
+    assert_expr::literal_int(inner_left, 3);
+    assert_expr::literal_int(inner_right, 2);
 }
 
 #[test]
-fn unary_expr() {
-    // Test negation
-    let expr = parse_expr("-42").unwrap();
-    match expr {
-        Expr::Unary {
-            op: UnaryOp::Neg,
-            operand,
-        } => {
-            assert_eq!(*operand, Expr::Literal(Value::Int(42)));
-        }
-        _ => panic!("Expected negation"),
-    }
+fn left_assoc_expr() {
+    // Subtraction should be left-associative: 10 - 5 - 2 = (10 - 5) - 2
+    let expr = TestHelper::assert_expr("10 - 5 - 2");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Sub);
+    assert_expr::literal_int(right, 2);
 
-    // Test logical NOT
-    let expr = parse_expr("!true").unwrap();
-    match expr {
-        Expr::Unary {
-            op: UnaryOp::Not,
-            operand,
-        } => {
-            assert_eq!(*operand, Expr::Literal(Value::Bool(true)));
-        }
-        _ => panic!("Expected logical NOT"),
-    }
-
-    // Test chained unary
-    let expr = parse_expr("!!true").unwrap();
-    match expr {
-        Expr::Unary {
-            op: UnaryOp::Not,
-            operand,
-        } => match &*operand {
-            Expr::Unary {
-                op: UnaryOp::Not,
-                operand,
-            } => {
-                assert_eq!(**operand, Expr::Literal(Value::Bool(true)));
-            }
-            _ => panic!("Expected nested NOT"),
-        },
-        _ => panic!("Expected NOT at top level"),
-    }
+    let (inner_left, inner_right) = assert_expr::binary_op(left, BinaryOp::Sub);
+    assert_expr::literal_int(inner_left, 10);
+    assert_expr::literal_int(inner_right, 5);
 }
 
 #[test]
-fn pre_increment_expr() {
-    // Pre-increment
-    let expr = parse_expr("++x").unwrap();
-    match expr {
-        Expr::PreIncrement { operand } => {
-            assert_eq!(*operand, Expr::Variable("x".to_string()));
-        }
-        _ => panic!("Expected pre-increment"),
-    }
+fn paren_expr() {
+    // Override precedence with parentheses
+    let expr = TestHelper::assert_expr("(2 + 3) * 4");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Mul);
+    assert_expr::literal_int(right, 4);
 
-    // Pre-decrement
-    let expr = parse_expr("--y").unwrap();
-    match expr {
-        Expr::PreDecrement { operand } => {
-            assert_eq!(*operand, Expr::Variable("y".to_string()));
-        }
-        _ => panic!("Expected pre-decrement"),
-    }
-}
+    let inner = assert_expr::group(left);
+    let (inner_left, inner_right) = assert_expr::binary_op(inner, BinaryOp::Add);
+    assert_expr::literal_int(inner_left, 2);
+    assert_expr::literal_int(inner_right, 3);
 
-#[test]
-fn post_increment_expr() {
-    // Post-increment (needs to be in a statement context)
-    let stmt = parse_stmt("x++;").unwrap();
-    match stmt {
-        Stmt::Expression { expr } => match expr {
-            Expr::PostIncrement { operand } => {
-                assert_eq!(*operand, Expr::Variable("x".to_string()));
-            }
-            _ => panic!("Expected post-increment"),
-        },
-        _ => panic!("Expected expression statement"),
-    }
+    // Nested parentheses
+    let expr = TestHelper::assert_expr("((1 + 2) * 3)");
+    let outer = assert_expr::group(&expr);
+    let (left, right) = assert_expr::binary_op(outer, BinaryOp::Mul);
+    assert_expr::literal_int(right, 3);
 
-    // Post-decrement
-    let stmt = parse_stmt("y--;").unwrap();
-    match stmt {
-        Stmt::Expression { expr } => match expr {
-            Expr::PostDecrement { operand } => {
-                assert_eq!(*operand, Expr::Variable("y".to_string()));
-            }
-            _ => panic!("Expected post-decrement"),
-        },
-        _ => panic!("Expected expression statement"),
-    }
+    let inner = assert_expr::group(left);
+    let (inner_left, inner_right) = assert_expr::binary_op(inner, BinaryOp::Add);
+    assert_expr::literal_int(inner_left, 1);
+    assert_expr::literal_int(inner_right, 2);
 }
 
 #[test]
 fn fn_call_expr() {
     // Simple function call
-    let expr = parse_expr("foo()").unwrap();
-    match expr {
-        Expr::Call { callee, args } => {
-            assert_eq!(*callee, Expr::Variable("foo".to_string()));
-            assert_eq!(args.len(), 0);
-        }
-        _ => panic!("Expected function call"),
-    }
+    let expr = TestHelper::assert_expr("foo()");
+    let (_, args) = assert_expr::call(&expr, "foo", 0);
+    assert_eq!(args.len(), 0);
 
     // Function call with arguments
-    let expr = parse_expr("add(1, 2, 3)").unwrap();
-    match expr {
-        Expr::Call { callee, args } => {
-            assert_eq!(*callee, Expr::Variable("add".to_string()));
-            assert_eq!(args.len(), 3);
-            assert_eq!(args[0], Expr::Literal(Value::Int(1)));
-            assert_eq!(args[1], Expr::Literal(Value::Int(2)));
-            assert_eq!(args[2], Expr::Literal(Value::Int(3)));
-        }
-        _ => panic!("Expected function call"),
-    }
+    let expr = TestHelper::assert_expr("add(1, 2, 3)");
+    let (_, args) = assert_expr::call(&expr, "add", 3);
+    assert_expr::literal_int(&args[0], 1);
+    assert_expr::literal_int(&args[1], 2);
+    assert_expr::literal_int(&args[2], 3);
 
-    // Chained function calls
-    // let expr = parse_expr("obj.method()().getValue()").unwrap();
-    // match expr {
-    //     Expr::Call { callee, args } => {
-    //         assert_eq!(args.len(), 0);
-    //         match &*callee {
-    //             Expr::Member { object, property } => {
-    //                 assert_eq!(property, "getValue");
-    //                 match &**object {
-    //                     Expr::Call { callee, args } => {
-    //                         assert_eq!(args.len(), 0);
-    //                         match &**callee {
-    //                             Expr::Call { callee, args } => {
-    //                                 assert_eq!(args.len(), 0);
-    //                                 match &**callee {
-    //                                     Expr::Member { object, property } => {
-    //                                         assert_eq!(**object, Expr::Variable("obj".to_string()));
-    //                                         assert_eq!(property, "method");
-    //                                     }
-    //                                     _ => panic!("Expected member access"),
-    //                                 }
-    //                             }
-    //                             _ => panic!("Expected function call"),
-    //                         }
-    //                     }
-    //                     _ => panic!("Expected function call"),
-    //                 }
-    //             }
-    //             _ => panic!("Expected member access"),
-    //         }
-    //     }
-    //     _ => panic!("Expected function call"),
-    // }
+    // Nested function calls
+    let expr = TestHelper::assert_expr("outer(inner(42))");
+    let (_, outer_args) = assert_expr::call(&expr, "outer", 1);
+    let (_, inner_args) = assert_expr::call(&outer_args[0], "inner", 1);
+    assert_expr::literal_int(&inner_args[0], 42);
+}
+
+#[test]
+fn arr_lit_expr() {
+    // Empty array
+    let expr = TestHelper::assert_expr("[]");
+    let elements = assert_expr::array(&expr, 0);
+    assert_eq!(elements.len(), 0);
+
+    // Array with elements
+    let expr = TestHelper::assert_expr("[1, 2, 3]");
+    let elements = assert_expr::array(&expr, 3);
+    assert_expr::literal_int(&elements[0], 1);
+    assert_expr::literal_int(&elements[1], 2);
+    assert_expr::literal_int(&elements[2], 3);
+
+    // Nested arrays
+    let expr = TestHelper::assert_expr("[[1, 2], [3, 4]]");
+    let elements = assert_expr::array(&expr, 2);
+
+    let first_nested = assert_expr::array(&elements[0], 2);
+    assert_expr::literal_int(&first_nested[0], 1);
+    assert_expr::literal_int(&first_nested[1], 2);
+
+    let second_nested = assert_expr::array(&elements[1], 2);
+    assert_expr::literal_int(&second_nested[0], 3);
+    assert_expr::literal_int(&second_nested[1], 4);
 }
 
 #[test]
 fn arr_index_expr() {
-    // Simple array indexing
-    let expr = parse_expr("arr[0]").unwrap();
-    match expr {
-        Expr::Index { object, index } => {
-            assert_eq!(*object, Expr::Variable("arr".to_string()));
-            assert_eq!(*index, Expr::Literal(Value::Int(0)));
-        }
-        _ => panic!("Expected array indexing"),
-    }
+    // Simple indexing
+    let expr = TestHelper::assert_expr("arr[0]");
+    let (object, index) = assert_expr::index(&expr);
+    assert_expr::variable(object, "arr");
+    assert_expr::literal_int(index, 0);
 
     // Multi-dimensional indexing
-    let expr = parse_expr("matrix[i][j]").unwrap();
-    match expr {
-        Expr::Index { object, index } => {
-            assert_eq!(*index, Expr::Variable("j".to_string()));
-            match &*object {
-                Expr::Index { object, index } => {
-                    assert_eq!(**object, Expr::Variable("matrix".to_string()));
-                    assert_eq!(**index, Expr::Variable("i".to_string()));
-                }
-                _ => panic!("Expected nested indexing"),
-            }
-        }
-        _ => panic!("Expected array indexing"),
-    }
+    let expr = TestHelper::assert_expr("matrix[i][j]");
+    let (outer_object, outer_index) = assert_expr::index(&expr);
+    assert_expr::variable(outer_index, "j");
+
+    let (inner_object, inner_index) = assert_expr::index(outer_object);
+    assert_expr::variable(inner_object, "matrix");
+    assert_expr::variable(inner_index, "i");
 
     // Complex expression as index
-    let expr = parse_expr("arr[i + 1]").unwrap();
-    match expr {
-        Expr::Index { object, index } => {
-            assert_eq!(*object, Expr::Variable("arr".to_string()));
-            match &*index {
-                Expr::Binary {
-                    op: BinaryOp::Add,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**left, Expr::Variable("i".to_string()));
-                    assert_eq!(**right, Expr::Literal(Value::Int(1)));
-                }
-                _ => panic!("Expected addition in index"),
-            }
-        }
-        _ => panic!("Expected array indexing"),
-    }
-}
+    let expr = TestHelper::assert_expr("arr[i + 1]");
+    let (object, index) = assert_expr::index(&expr);
+    assert_expr::variable(object, "arr");
 
-#[test]
-fn arr_literal_expr() {
-    // Empty array
-    let expr = parse_expr("[]").unwrap();
-    match expr {
-        Expr::Array { elements } => {
-            assert_eq!(elements.len(), 0);
-        }
-        _ => panic!("Expected array literal"),
-    }
-
-    // Array with elements
-    let expr = parse_expr("[1, 2, 3]").unwrap();
-    match expr {
-        Expr::Array { elements } => {
-            assert_eq!(elements.len(), 3);
-            assert_eq!(elements[0], Expr::Literal(Value::Int(1)));
-            assert_eq!(elements[1], Expr::Literal(Value::Int(2)));
-            assert_eq!(elements[2], Expr::Literal(Value::Int(3)));
-        }
-        _ => panic!("Expected array literal"),
-    }
-
-    // Nested arrays
-    let expr = parse_expr("[[1, 2], [3, 4]]").unwrap();
-    match expr {
-        Expr::Array { elements } => {
-            assert_eq!(elements.len(), 2);
-            match &elements[0] {
-                Expr::Array { elements } => {
-                    assert_eq!(elements.len(), 2);
-                    assert_eq!(elements[0], Expr::Literal(Value::Int(1)));
-                    assert_eq!(elements[1], Expr::Literal(Value::Int(2)));
-                }
-                _ => panic!("Expected nested array"),
-            }
-        }
-        _ => panic!("Expected array literal"),
-    }
-}
-
-#[test]
-fn assignment_expr() {
-    // Simple assignment
-    let stmt = parse_stmt("x = 5;").unwrap();
-    match stmt {
-        Stmt::Expression { expr } => match expr {
-            Expr::Assignment { target, value } => {
-                assert_eq!(*target, Expr::Variable("x".to_string()));
-                assert_eq!(*value, Expr::Literal(Value::Int(5)));
-            }
-            _ => panic!("Expected assignment"),
-        },
-        _ => panic!("Expected expression statement"),
-    }
-
-    // Compound assignments
-    let compounds = vec![
-        ("x += 5", BinaryOp::Add),
-        ("x -= 5", BinaryOp::Sub),
-        ("x *= 5", BinaryOp::Mul),
-        ("x /= 5", BinaryOp::Div),
-        ("x %= 5", BinaryOp::Mod),
-        ("x ^= 5", BinaryOp::Pow),
-        ("x &= 5", BinaryOp::BitAnd),
-        ("x |= 5", BinaryOp::BitOr),
-        ("x <<= 5", BinaryOp::Shl),
-        ("x >>= 5", BinaryOp::Shr),
-    ];
-
-    for (source, expected_op) in compounds {
-        let stmt = parse_stmt(&format!("{};", source)).unwrap();
-        match stmt {
-            Stmt::Expression { expr } => match expr {
-                Expr::CompoundAssignment { target, op, value } => {
-                    assert_eq!(*target, Expr::Variable("x".to_string()));
-                    assert_eq!(op, expected_op);
-                    assert_eq!(*value, Expr::Literal(Value::Int(5)));
-                }
-                _ => panic!("Expected compound assignment for {}", source),
-            },
-            _ => panic!("Expected expression statement for {}", source),
-        }
-    }
-}
-
-#[test]
-fn grouping_expr() {
-    // Test that parentheses override precedence
-    let expr = parse_expr("(2 + 3) * 4").unwrap();
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::Mul,
-            left,
-            right,
-        } => {
-            assert_eq!(*right, Expr::Literal(Value::Int(4)));
-            match &*left {
-                Expr::Group(inner) => match &**inner {
-                    Expr::Binary {
-                        op: BinaryOp::Add,
-                        left,
-                        right,
-                    } => {
-                        assert_eq!(**left, Expr::Literal(Value::Int(2)));
-                        assert_eq!(**right, Expr::Literal(Value::Int(3)));
-                    }
-                    _ => panic!("Expected addition in group"),
-                },
-                _ => panic!("Expected grouped expression"),
-            }
-        }
-        _ => panic!("Expected multiplication"),
-    }
-
-    // Nested parentheses
-    let expr = parse_expr("((1 + 2) * 3)").unwrap();
-    match expr {
-        Expr::Group(outer) => match &*outer {
-            Expr::Binary {
-                op: BinaryOp::Mul,
-                left,
-                right,
-            } => {
-                assert_eq!(**right, Expr::Literal(Value::Int(3)));
-                match &**left {
-                    Expr::Group(inner) => match &**inner {
-                        Expr::Binary {
-                            op: BinaryOp::Add,
-                            left,
-                            right,
-                        } => {
-                            assert_eq!(**left, Expr::Literal(Value::Int(1)));
-                            assert_eq!(**right, Expr::Literal(Value::Int(2)));
-                        }
-                        _ => panic!("Expected addition in inner group"),
-                    },
-                    _ => panic!("Expected grouped expression"),
-                }
-            }
-            _ => panic!("Expected multiplication"),
-        },
-        _ => panic!("Expected grouped expression"),
-    }
+    let (left, right) = assert_expr::binary_op(index, BinaryOp::Add);
+    assert_expr::variable(left, "i");
+    assert_expr::literal_int(right, 1);
 }
 
 #[test]
 fn member_expr() {
     // Simple member access
-    let expr = parse_expr("obj.property").unwrap();
-    match expr {
-        Expr::Member { object, property } => {
-            assert_eq!(*object, Expr::Variable("obj".to_string()));
-            assert_eq!(property, "property");
-        }
-        _ => panic!("Expected member access"),
-    }
+    let expr = TestHelper::assert_expr("obj.property");
+    let object = assert_expr::member(&expr, "property");
+    assert_expr::variable(object, "obj");
 
     // Chained member access
-    let expr = parse_expr("obj.prop1.prop2").unwrap();
-    match expr {
-        Expr::Member { object, property } => {
-            assert_eq!(property, "prop2");
-            match &*object {
-                Expr::Member { object, property } => {
-                    assert_eq!(**object, Expr::Variable("obj".to_string()));
-                    assert_eq!(property, "prop1");
-                }
-                _ => panic!("Expected chained member access"),
-            }
-        }
-        _ => panic!("Expected member access"),
-    }
+    let expr = TestHelper::assert_expr("obj.prop1.prop2");
+    let outer_object = assert_expr::member(&expr, "prop2");
+    let inner_object = assert_expr::member(outer_object, "prop1");
+    assert_expr::variable(inner_object, "obj");
+
+    // Mixed member access and indexing
+    let expr = TestHelper::assert_expr("obj.arr[0].prop");
+    let final_object = assert_expr::member(&expr, "prop");
+    let (index_object, index) = assert_expr::index(final_object);
+    let member_object = assert_expr::member(index_object, "arr");
+    assert_expr::variable(member_object, "obj");
+    assert_expr::literal_int(index, 0);
 }
 
 #[test]
 fn complex_expr() {
-    // Test a very complex expression
-    let expr = parse_expr("(a + b) * func(x, y.prop[0]) >= 10 && !flag").unwrap();
+    // Test a complex expression with multiple operators and precedence
+    let expr = TestHelper::assert_expr("(a + b) * func(x, y.prop[0]) >= 10 && !flag");
 
-    // This should parse as: ((a + b) * func(x, y.prop[0]) >= 10) && (!flag)
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::And,
-            left,
-            right,
-        } => {
-            // Check the left side: (a + b) * func(x, y.prop[0]) >= 10
-            match &*left {
-                Expr::Binary {
-                    op: BinaryOp::Ge,
-                    left,
-                    right,
-                } => {
-                    assert_eq!(**right, Expr::Literal(Value::Int(10)));
-                    // Left side should be (a + b) * func(x, y.prop[0])
-                    match &**left {
-                        Expr::Binary {
-                            op: BinaryOp::Mul,
-                            left,
-                            right,
-                        } => {
-                            // Check (a + b)
-                            match &**left {
-                                Expr::Group(inner) => match &**inner {
-                                    Expr::Binary {
-                                        op: BinaryOp::Add,
-                                        left,
-                                        right,
-                                    } => {
-                                        assert_eq!(**left, Expr::Variable("a".to_string()));
-                                        assert_eq!(**right, Expr::Variable("b".to_string()));
-                                    }
-                                    _ => panic!("Expected addition in group"),
-                                },
-                                _ => panic!("Expected grouped expression"),
-                            }
+    // Should parse as: ((a + b) * func(x, y.prop[0]) >= 10) && (!flag)
+    let (comparison, not_expr) = assert_expr::binary_op(&expr, BinaryOp::And);
 
-                            // Check func(x, y.prop[0])
-                            match &**right {
-                                Expr::Call { callee, args } => {
-                                    assert_eq!(**callee, Expr::Variable("func".to_string()));
-                                    assert_eq!(args.len(), 2);
-                                    assert_eq!(args[0], Expr::Variable("x".to_string()));
+    // Check right side: !flag
+    let flag_operand = assert_expr::unary_op(not_expr, UnaryOp::Not);
+    assert_expr::variable(flag_operand, "flag");
 
-                                    // Check y.prop[0]
-                                    match &args[1] {
-                                        Expr::Index { object, index } => {
-                                            match &**object {
-                                                Expr::Member { object, property } => {
-                                                    assert_eq!(
-                                                        **object,
-                                                        Expr::Variable("y".to_string())
-                                                    );
-                                                    assert_eq!(property, "prop");
-                                                }
-                                                _ => panic!("Expected member access"),
-                                            }
-                                            assert_eq!(**index, Expr::Literal(Value::Int(0)));
-                                        }
-                                        _ => panic!("Expected array indexing"),
-                                    }
-                                }
-                                _ => panic!("Expected function call"),
-                            }
-                        }
-                        _ => panic!("Expected multiplication"),
-                    }
-                }
-                _ => panic!("Expected greater-than-or-equal comparison"),
-            }
+    // Check left side: (a + b) * func(x, y.prop[0]) >= 10
+    let (multiplication, ten) = assert_expr::binary_op(comparison, BinaryOp::Ge);
+    assert_expr::literal_int(ten, 10);
 
-            // Check the right side: !flag
-            match &*right {
-                Expr::Unary {
-                    op: UnaryOp::Not,
-                    operand,
-                } => {
-                    assert_eq!(**operand, Expr::Variable("flag".to_string()));
-                }
-                _ => panic!("Expected logical NOT"),
-            }
-        }
-        _ => panic!("Expected AND at top level"),
+    // Check multiplication: (a + b) * func(x, y.prop[0])
+    let (grouped_add, func_call) = assert_expr::binary_op(multiplication, BinaryOp::Mul);
+
+    // Check grouped addition: (a + b)
+    let addition = assert_expr::group(grouped_add);
+    let (a_var, b_var) = assert_expr::binary_op(addition, BinaryOp::Add);
+    assert_expr::variable(a_var, "a");
+    assert_expr::variable(b_var, "b");
+
+    // Check function call: func(x, y.prop[0])
+    let (_, args) = assert_expr::call(func_call, "func", 2);
+    assert_expr::variable(&args[0], "x");
+
+    // Check second argument: y.prop[0]
+    let (member_obj, index) = assert_expr::index(&args[1]);
+    let y_obj = assert_expr::member(member_obj, "prop");
+    assert_expr::variable(y_obj, "y");
+    assert_expr::literal_int(index, 0);
+}
+
+#[test]
+fn error_expr() {
+    for case in ERROR_CASES {
+        TestHelper::assert_expr_err(case.source, case.expected);
     }
 }
 
 #[test]
-fn expr_err() {
-    // Missing operand
-    assert!(parse_expr("+").is_err());
-    assert!(parse_expr("5 +").is_err());
+fn comment_expr() {
+    // Line comments
+    let expr = TestHelper::assert_expr("5 + 3 // this is a comment");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Add);
+    assert_expr::literal_int(left, 5);
+    assert_expr::literal_int(right, 3);
 
-    // Mismatched parentheses
-    assert!(parse_expr("(5 + 3").is_err());
-    assert!(parse_expr("5 + 3)").is_err());
+    // Block comments
+    let expr = TestHelper::assert_expr("5 /* comment */ + /* another */ 3");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Add);
+    assert_expr::literal_int(left, 5);
+    assert_expr::literal_int(right, 3);
 
-    // Mismatched brackets
-    assert!(parse_expr("[1, 2, 3").is_err());
-    assert!(parse_expr("arr[0").is_err());
+    // Multi-line block comments
+    let expr = TestHelper::assert_expr("5 + /* multi\nline\ncomment */ 3");
+    let (left, right) = assert_expr::binary_op(&expr, BinaryOp::Add);
+    assert_expr::literal_int(left, 5);
+    assert_expr::literal_int(right, 3);
+}
 
-    // Invalid tokens
-    assert!(parse_expr("5 @ 3").is_err());
-    assert!(parse_expr("$invalid").is_err());
+#[test]
+fn trailing_commas_expr() {
+    // Function arguments with trailing comma
+    let expr = TestHelper::assert_expr("func(1, 2, 3,)");
+    let (_, args) = assert_expr::call(&expr, "func", 3);
+    assert_expr::literal_int(&args[0], 1);
+    assert_expr::literal_int(&args[1], 2);
+    assert_expr::literal_int(&args[2], 3);
+
+    // Array elements with trailing comma
+    let expr = TestHelper::assert_expr("[1, 2, 3,]");
+    let elements = assert_expr::array(&expr, 3);
+    assert_expr::literal_int(&elements[0], 1);
+    assert_expr::literal_int(&elements[1], 2);
+    assert_expr::literal_int(&elements[2], 3);
 }

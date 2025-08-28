@@ -1,102 +1,250 @@
-use crate::{ast::stmt::Stmt, lexer::Token};
+use crate::{
+    ast::{expr::Expr, stmt::Stmt},
+    lexer::Token,
+};
+use std::ops::{Deref, Range};
 
+mod builder;
+mod config;
 mod error;
 
-pub use error::ParseError;
+pub use builder::ParserBuilder;
+pub use config::ParserConfig;
+pub use error::{ErrorContext, ParseError};
 
-pub trait Parse: Sized {
-    fn parse(parser: &mut Parser) -> Result<Self, ParseError>;
+/// Enhanced token with source position information
+#[derive(Debug, Clone)]
+pub struct TokenSpan {
+    pub token: Token,
+    pub span: Range<usize>,
 }
 
+impl Deref for TokenSpan {
+    type Target = Token;
+
+    fn deref(&self) -> &Self::Target {
+        &self.token
+    }
+}
+
+/// Parser with configuration and safety features
 #[derive(Clone)]
 pub struct Parser<'a> {
-    pub tokens: &'a [Token],
+    pub config: ParserConfig,
+    pub source: &'a str,
+    pub tokens: Vec<TokenSpan>,
     pub pos: usize,
+    depth: usize,
 }
+
 impl<'a> Parser<'a> {
-
-
-    pub fn new(tokens: &'a [Token]) -> Self {
-        Self { tokens, pos: 0 }
+    pub fn builder(source: &'a str) -> ParserBuilder<'a> {
+        ParserBuilder::new(source)
     }
 
-    pub fn current(&self) -> Option<&Token> {
-        self.tokens.get(self.pos)
+    pub fn parse_src(source: &'a str) -> Result<Vec<Stmt>, ParseError> {
+        let mut parser = Self::builder(source).build()?;
+        parser.parse()
     }
 
-    pub fn advance(&mut self) -> Option<&Token> {
-        let tok = self.tokens.get(self.pos);
-        self.pos += 1;
-        tok
+    pub fn parse_expr(source: &'a str) -> Result<Expr, ParseError> {
+        let mut parser = Self::builder(source).build()?;
+        let expr = parser.safe_call(|p| crate::ast::expr::Expr::parse(p))?;
+
+        match parser.eof() {
+            true => Ok(expr),
+            false => Err(parser.error("unexpected tokens after expression", Some("end of input"))),
+        }
+    }
+
+    pub fn parse_stmt(source: &'a str) -> Result<Stmt, ParseError> {
+        let mut parser = Self::builder(source).build()?;
+        parser.safe_call(|p| Stmt::parse(p))
+    }
+
+    fn eof_position(&self) -> usize {
+        self.tokens.last().map(|pt| pt.span.end).unwrap_or(0)
+    }
+
+    pub fn eof(&self) -> bool {
+        self.current().is_none() // Use current() which already skips comments
+    }
+
+    pub fn current(&self) -> Option<&TokenSpan> {
+        let mut pos = self.pos;
+        while let Some(token_span) = self.tokens.get(pos) {
+            match token_span.is_comment() {
+                true => pos += 1,
+                false => return Some(token_span),
+            }
+        }
+        None
+    }
+
+    pub fn current_span(&self) -> Option<Range<usize>> {
+        self.current().map(|pt| pt.span.clone())
+    }
+
+    pub fn current_position(&self) -> usize {
+        match self.current() {
+            Some(ts) => ts.span.start,
+            None => self.eof_position(),
+        }
     }
 
     pub fn peek(&self) -> Option<&Token> {
-        self.tokens.get(self.pos)
+        self.current().map(|ts| &ts.token)
     }
 
     pub fn peek_ahead(&self, n: usize) -> Option<&Token> {
-        self.tokens.get(self.pos + n)
+        let mut pos = self.pos;
+        let mut count = 0;
+
+        while let Some(token_span) = self.tokens.get(pos) {
+            match token_span.is_comment() {
+                false => match count == n {
+                    true => return Some(&token_span.token),
+                    false => count += 1,
+                },
+                true => {}
+            }
+
+            pos += 1;
+
+            match pos > self.pos + self.tokens.len() {
+                true => break,
+                false => {}
+            }
+        }
+
+        None
     }
 
-    pub fn expect(&mut self, expected: Token) -> Result<(), ParseError> {
-        let current_pos = self.pos;
-        let got = self.advance();
-        match got {
-            Some(token) if token == &expected => Ok(()),
-            Some(token) => Err(ParseError::UnexpectedToken {
-                position: current_pos,
-                expected: Some(format!("{:?}", expected)),
-                found: format!("{:?}", token),
-            }),
-            None => Err(ParseError::UnexpectedEof {
-                position: self.pos,
-                expected: format!("{:?}", expected),
-            }),
+    pub fn advance(&mut self) -> Option<&TokenSpan> {
+        let start_pos = self.pos;
+
+        loop {
+            match self.pos >= self.tokens.len() {
+                true => return None,
+                false => {}
+            }
+
+            let span = &self.tokens[self.pos];
+            self.pos += 1;
+
+            match span.is_comment() {
+                false => return Some(span),
+                true => {}
+            }
+
+            match self.pos > start_pos + self.tokens.len() {
+                true => return None,
+                false => {}
+            }
         }
     }
 
     pub fn consume(&mut self, token: &Token) -> bool {
-        if self.peek() == Some(token) {
-            self.advance();
-            true
-        } else {
-            false
+        match self.peek() == Some(token) {
+            true => {
+                self.advance();
+                true
+            }
+            false => false,
         }
     }
 
-    pub fn is_at_end(&self) -> bool {
-        self.pos >= self.tokens.len()
+    pub fn expect(&mut self, expected: Token) -> Result<(), ParseError> {
+        let source = self.source;
+
+        match self.advance() {
+            Some(token) => match token.token == expected {
+                true => Ok(()),
+                false => Err(ParseError::UnexpectedToken {
+                    expected: Some(format!("{:?}", expected)),
+                    found: format!("{:?}", token.token),
+                    span: token.span.clone(),
+                    context: ErrorContext::from_span(source, &token.span),
+                }),
+            },
+            None => {
+                let position = self.eof_position();
+
+                Err(ParseError::UnexpectedEof {
+                    position,
+                    expected: format!("{:?}", expected),
+                    context: ErrorContext::from_span(source, &(position..position)),
+                })
+            }
+        }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut statements = Vec::new();
 
-        while !self.is_at_end() {
-            statements.push(Stmt::parse(self)?);
+        while !self.eof() {
+            statements.push(self.safe_call(|parser| Stmt::parse(parser))?);
         }
 
         Ok(statements)
     }
 
+    pub fn safe_call<T, F>(&mut self, f: F) -> Result<T, ParseError>
+    where
+        F: FnOnce(&mut Self) -> Result<T, ParseError>,
+    {
+        self.depth += 1;
+
+        let result = match self.depth > self.config.max_recursion_depth {
+            true => Err(ParseError::TooMuchRecursion {
+                max_depth: self.config.max_recursion_depth,
+                position: self.current_position(),
+            }),
+            false => f(self),
+        };
+
+        self.depth = self.depth.saturating_sub(1);
+        result
+    }
+
     pub fn error(&self, message: &str, expected: Option<&str>) -> ParseError {
-        match (self.peek(), expected) {
-            (Some(token), Some(exp)) => ParseError::UnexpectedToken {
-                position: self.pos,
+        match (self.current(), expected) {
+            (Some(token_span), Some(exp)) => ParseError::UnexpectedToken {
                 expected: Some(exp.to_string()),
-                found: format!("{:?}", token),
+                found: format!("{:?}", token_span.token),
+                span: token_span.span.clone(),
+                context: ErrorContext::from_span(self.source, &token_span.span),
             },
-            (Some(_), None) => ParseError::InvalidSyntax {
+            (Some(token_span), None) => ParseError::InvalidSyntax {
                 message: message.to_string(),
-                position: self.pos,
+                span: token_span.span.clone(),
+                context: ErrorContext::from_span(self.source, &token_span.span),
             },
-            (None, Some(exp)) => ParseError::UnexpectedEof {
-                position: self.pos,
-                expected: exp.to_string(),
-            },
-            (None, None) => ParseError::UnexpectedEof {
-                position: self.pos,
-                expected: "token".to_string(),
-            },
+            (None, Some(exp)) => {
+                let position = self.eof_position();
+                ParseError::UnexpectedEof {
+                    expected: exp.to_string(),
+                    position,
+                    context: ErrorContext::from_span(self.source, &(position..position)),
+                }
+            }
+            (None, None) => {
+                let position = self.eof_position();
+
+                ParseError::UnexpectedEof {
+                    expected: "token".to_string(),
+                    position,
+                    context: ErrorContext::from_span(self.source, &(position..position)),
+                }
+            }
         }
     }
+
+    pub fn expected(&self, expected: &str) -> ParseError {
+        self.error("", Some(expected))
+    }
+}
+
+pub trait Parse: Sized {
+    fn parse(parser: &mut Parser) -> Result<Self, ParseError>;
 }

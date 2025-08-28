@@ -1,65 +1,12 @@
 use crate::{
     lexer::Token,
-    parser::{Parse, ParseError, Parser},
+    parser::{ErrorContext, Parse, ParseError, Parser},
 };
 
-use super::value::Value;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BinaryOp {
-    // Arithmetic
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Pow,
-
-    // Comparison
-    Eq,
-    Neq,
-    Lt,
-    Le,
-    Gt,
-    Ge,
-
-    // Logic
-    And,
-    Or,
-
-    // Bitwise
-    BitAnd,
-    BitOr,
-    Shl,
-    Shr,
-}
-
-// impl BinaryOp {
-//     pub fn precedence(&self) -> u8 {
-//         match self {
-//             BinaryOp::Or => 1,
-//             BinaryOp::And => 2,
-//             BinaryOp::BitOr => 3,
-//             BinaryOp::BitAnd => 4,
-//             BinaryOp::Eq | BinaryOp::Neq => 5,
-//             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 6,
-//             BinaryOp::Shl | BinaryOp::Shr => 7,
-//             BinaryOp::Add | BinaryOp::Sub => 8,
-//             BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 9,
-//             BinaryOp::Pow => 10,
-//         }
-//     }
-
-//     pub fn is_right_associative(&self) -> bool {
-//         matches!(self, BinaryOp::Pow)
-//     }
-// }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum UnaryOp {
-    Not, // !
-    Neg, // -
-}
+use super::{
+    op::{BinaryOp, Precedence, UnaryOp},
+    value::Value,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -135,279 +82,125 @@ pub enum Expr {
 }
 
 impl Expr {
+    fn parse_expression(parser: &mut Parser, min_precedence: u8) -> Result<Self, ParseError> {
+        parser.safe_call(|parser| {
+            let mut left = Self::parse_unary(parser)?;
+
+            while let Some(token) = parser.peek() {
+                match BinaryOp::from_token(token) {
+                    Some(op) => {
+                        let precedence = op.precedence();
+
+                        // Check if we should continue parsing at this precedence level
+                        if precedence < min_precedence {
+                            break;
+                        }
+
+                        parser.advance(); // consume the operator
+
+                        // For right-associative operators, use same precedence
+                        // For left-associative, use precedence + 1
+                        let next_min_precedence = match op.is_right_associative() {
+                            true => precedence,
+                            false => precedence + 1,
+                        };
+
+                        let right = Self::parse_expression(parser, next_min_precedence)?;
+
+                        left = Expr::Binary {
+                            op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        };
+                    }
+                    None => break,
+                }
+            }
+
+            Ok(left)
+        })
+    }
+
     fn parse_assignment(parser: &mut Parser) -> Result<Self, ParseError> {
-        let expr = Self::parse_logical_or(parser)?;
+        parser.safe_call(|parser| {
+            let expr = Self::parse_expression(parser, 0)?; // Start with minimum precedence
 
-        // Handle assignment operators
-        match parser.peek().cloned() {
-            Some(Token::Equal) => {
-                parser.advance();
-                let value = Self::parse_assignment(parser)?;
-                Ok(Expr::Assignment {
-                    target: Box::new(expr),
-                    value: Box::new(value),
-                })
+            // Handle assignment operators
+            match parser.peek() {
+                Some(Token::Equal) => {
+                    parser.advance();
+                    let value = Self::parse_assignment(parser)?;
+                    Ok(Expr::Assignment {
+                        target: Box::new(expr),
+                        value: Box::new(value),
+                    })
+                }
+                Some(
+                    Token::PlusEqual
+                    | Token::MinusEqual
+                    | Token::StarEqual
+                    | Token::SlashEqual
+                    | Token::ModuloEqual
+                    | Token::CaretEqual
+                    | Token::BitAndEqual
+                    | Token::BitOrEqual
+                    | Token::ShiftLeftEqual
+                    | Token::ShiftRightEqual,
+                ) => {
+                    let op_token = parser.peek().unwrap().clone();
+                    parser.advance();
+                    let value = Self::parse_assignment(parser)?;
+                    let binary_op = match op_token {
+                        Token::PlusEqual => BinaryOp::Add,
+                        Token::MinusEqual => BinaryOp::Sub,
+                        Token::StarEqual => BinaryOp::Mul,
+                        Token::SlashEqual => BinaryOp::Div,
+                        Token::ModuloEqual => BinaryOp::Mod,
+                        Token::CaretEqual => BinaryOp::Pow,
+                        Token::BitAndEqual => BinaryOp::BitAnd,
+                        Token::BitOrEqual => BinaryOp::BitOr,
+                        Token::ShiftLeftEqual => BinaryOp::Shl,
+                        Token::ShiftRightEqual => BinaryOp::Shr,
+                        _ => unreachable!(),
+                    };
+                    Ok(Expr::CompoundAssignment {
+                        target: Box::new(expr),
+                        op: binary_op,
+                        value: Box::new(value),
+                    })
+                }
+                _ => Ok(expr),
             }
-            Some(
-                op @ (Token::PlusEqual
-                | Token::MinusEqual
-                | Token::StarEqual
-                | Token::SlashEqual
-                | Token::ModuloEqual
-                | Token::CaretEqual
-                | Token::BitAndEqual
-                | Token::BitOrEqual
-                | Token::ShiftLeftEqual
-                | Token::ShiftRightEqual),
-            ) => {
-                parser.advance();
-                let value = Self::parse_assignment(parser)?;
-                let binary_op = match op {
-                    Token::PlusEqual => BinaryOp::Add,
-                    Token::MinusEqual => BinaryOp::Sub,
-                    Token::StarEqual => BinaryOp::Mul,
-                    Token::SlashEqual => BinaryOp::Div,
-                    Token::ModuloEqual => BinaryOp::Mod,
-                    Token::CaretEqual => BinaryOp::Pow,
-                    Token::BitAndEqual => BinaryOp::BitAnd,
-                    Token::BitOrEqual => BinaryOp::BitOr,
-                    Token::ShiftLeftEqual => BinaryOp::Shl,
-                    Token::ShiftRightEqual => BinaryOp::Shr,
-                    _ => unreachable!(),
-                };
-                Ok(Expr::CompoundAssignment {
-                    target: Box::new(expr),
-                    op: binary_op,
-                    value: Box::new(value),
-                })
-            }
-            _ => Ok(expr),
-        }
-    }
-
-    fn parse_logical_or(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_logical_and(parser)?;
-
-        while parser.consume(&Token::Or) {
-            let right = Self::parse_logical_and(parser)?;
-            expr = Expr::Binary {
-                op: BinaryOp::Or,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_logical_and(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_bitwise_or(parser)?;
-
-        while parser.consume(&Token::And) {
-            let right = Self::parse_bitwise_or(parser)?;
-            expr = Expr::Binary {
-                op: BinaryOp::And,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_bitwise_or(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_bitwise_and(parser)?;
-
-        while parser.consume(&Token::BitOr) {
-            let right = Self::parse_bitwise_and(parser)?;
-            expr = Expr::Binary {
-                op: BinaryOp::BitOr,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_bitwise_and(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_equality(parser)?;
-
-        while parser.consume(&Token::BitAnd) {
-            let right = Self::parse_equality(parser)?;
-            expr = Expr::Binary {
-                op: BinaryOp::BitAnd,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_equality(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_comparison(parser)?;
-
-        loop {
-            let binary_op = match parser.peek() {
-                Some(Token::EqualEqual) => BinaryOp::Eq,
-                Some(Token::BangEqual) => BinaryOp::Neq,
-                _ => break,
-            };
-
-            parser.advance();
-            let right = Self::parse_comparison(parser)?;
-            expr = Expr::Binary {
-                op: binary_op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_comparison(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_shift(parser)?;
-
-        loop {
-            let binary_op = match parser.peek() {
-                Some(Token::Greater) => BinaryOp::Gt,
-                Some(Token::GreaterEqual) => BinaryOp::Ge,
-                Some(Token::Less) => BinaryOp::Lt,
-                Some(Token::LessEqual) => BinaryOp::Le,
-                _ => break,
-            };
-
-            parser.advance();
-            let right = Self::parse_shift(parser)?;
-            expr = Expr::Binary {
-                op: binary_op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_shift(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_term(parser)?;
-
-        loop {
-            let binary_op = match parser.peek() {
-                Some(Token::ShiftLeft) => BinaryOp::Shl,
-                Some(Token::ShiftRight) => BinaryOp::Shr,
-                _ => break,
-            };
-
-            parser.advance();
-            let right = Self::parse_term(parser)?;
-            expr = Expr::Binary {
-                op: binary_op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_term(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_factor(parser)?;
-
-        loop {
-            let binary_op = match parser.peek() {
-                Some(Token::Plus) => BinaryOp::Add,
-                Some(Token::Minus) => BinaryOp::Sub,
-                _ => break,
-            };
-
-            parser.advance();
-            let right = Self::parse_factor(parser)?;
-            expr = Expr::Binary {
-                op: binary_op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_factor(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_power(parser)?;
-
-        loop {
-            let binary_op = match parser.peek() {
-                Some(Token::Star) => BinaryOp::Mul,
-                Some(Token::Slash) => BinaryOp::Div,
-                Some(Token::Modulo) => BinaryOp::Mod,
-                _ => break,
-            };
-
-            parser.advance();
-            let right = Self::parse_power(parser)?;
-            expr = Expr::Binary {
-                op: binary_op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
-    }
-
-    fn parse_power(parser: &mut Parser) -> Result<Self, ParseError> {
-        let mut expr = Self::parse_unary(parser)?;
-
-        // Right-associative
-        if matches!(parser.peek(), Some(Token::Caret | Token::DoubleStar)) {
-            parser.advance();
-            let right = Self::parse_power(parser)?; // Right-associative recursion
-            expr = Expr::Binary {
-                op: BinaryOp::Pow,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
+        })
     }
 
     fn parse_unary(parser: &mut Parser) -> Result<Self, ParseError> {
         match parser.peek() {
-            Some(Token::Bang) => {
-                parser.advance();
-                let expr = Self::parse_unary(parser)?;
-                Ok(Expr::Unary {
-                    op: UnaryOp::Not,
-                    operand: Box::new(expr),
-                })
-            }
-            Some(Token::Minus) => {
-                parser.advance();
-                let expr = Self::parse_unary(parser)?;
-                Ok(Expr::Unary {
-                    op: UnaryOp::Neg,
-                    operand: Box::new(expr),
-                })
-            }
-            Some(Token::PlusPlus) => {
-                parser.advance();
-                let expr = Self::parse_postfix(parser)?;
-                Ok(Expr::PreIncrement {
-                    operand: Box::new(expr),
-                })
-            }
-            Some(Token::MinusMinus) => {
-                parser.advance();
-                let expr = Self::parse_postfix(parser)?;
-                Ok(Expr::PreDecrement {
-                    operand: Box::new(expr),
-                })
-            }
-            _ => Self::parse_postfix(parser),
+            Some(token) => match UnaryOp::from_token(token) {
+                Some(unary_op) => {
+                    parser.advance();
+                    Ok(Expr::Unary {
+                        op: unary_op,
+                        operand: Box::new(Self::parse_unary(parser)?),
+                    })
+                }
+                None => match token {
+                    Token::PlusPlus => {
+                        parser.advance();
+                        Ok(Expr::PreIncrement {
+                            operand: Box::new(Self::parse_postfix(parser)?),
+                        })
+                    }
+                    Token::MinusMinus => {
+                        parser.advance();
+                        Ok(Expr::PreDecrement {
+                            operand: Box::new(Self::parse_postfix(parser)?),
+                        })
+                    }
+                    _ => Self::parse_postfix(parser),
+                },
+            },
+            None => Self::parse_postfix(parser),
         }
     }
 
@@ -438,17 +231,30 @@ impl Expr {
                     };
                 }
                 Some(Token::Dot) => {
+                    let source = parser.source;
+                    
                     parser.advance();
-                    if let Some(Token::Identifier(name)) = parser.advance() {
-                        expr = Expr::Member {
-                            object: Box::new(expr),
-                            property: name.clone(),
-                        };
-                    } else {
-                        return Err(ParseError::MissingToken {
-                            position: parser.pos.saturating_sub(1),
-                            expected: "property name".to_string(),
-                        });
+
+                    match parser.advance() {
+                        Some(token_span) => match &token_span.token {
+                            Token::Identifier(name) => {
+                                expr = Expr::Member {
+                                    object: Box::new(expr),
+                                    property: name.clone(),
+                                };
+                            }
+                            _ => {
+                                return Err(ParseError::UnexpectedToken {
+                                    expected: Some("identifier".to_string()),
+                                    found: format!("{:?}", token_span.token),
+                                    span: token_span.span.clone(),
+                                    context: ErrorContext::from_span(source, &token_span.span),
+                                });
+                            }
+                        },
+                        None => {
+                            return Err(parser.expected("property name"));
+                        }
                     }
                 }
                 _ => break,
@@ -484,9 +290,15 @@ impl Expr {
             match parser.peek() {
                 Some(Token::Comma) => {
                     parser.advance();
+                    // Handle trailing comma if configured
+                    if parser.config.allow_trailing_commas()
+                        && parser.peek() == Some(&Token::RightParen)
+                    {
+                        break;
+                    }
                 }
                 Some(Token::RightParen) => break,
-                _ => return Err(parser.error("Expected ',' or ')'", Some("',' or ')'"))),
+                _ => return Err(parser.expected("',' or ')'")),
             }
         }
 
@@ -494,26 +306,37 @@ impl Expr {
     }
 
     fn parse_primary(parser: &mut Parser) -> Result<Self, ParseError> {
-        let token = parser.advance();
+        let source = parser.source;
 
-        match token {
-            Some(Token::IntLiteral(i)) => Ok(Expr::Literal(Value::Int(*i))),
-            Some(Token::FloatLiteral(f)) => Ok(Expr::Literal(Value::Float(*f))),
-            Some(Token::BoolTrue) => Ok(Expr::Literal(Value::Bool(true))),
-            Some(Token::BoolFalse) => Ok(Expr::Literal(Value::Bool(false))),
-            Some(Token::StringLiteral(s)) => Ok(Expr::Literal(Value::Str(s.clone()))),
-            Some(Token::Identifier(name)) => Ok(Expr::Variable(name.clone())),
-            Some(Token::LeftParen) => {
-                let expr = Self::parse(parser)?;
-                parser.expect(Token::RightParen)?;
-                Ok(Expr::Group(Box::new(expr)))
-            }
-            Some(Token::LeftBracket) => {
-                // Need to backtrack since we consumed the bracket
-                parser.pos -= 1;
-                Self::parse_array_literal(parser)
-            }
-            _ => Err(parser.error("Unexpected token", Some("expression"))),
+        match parser.advance() {
+            Some(token_span) => match &token_span.token {
+                Token::IntLiteral(i) => Ok(Expr::Literal(Value::Int(*i))),
+                Token::FloatLiteral(f) => Ok(Expr::Literal(Value::Float(*f))),
+                Token::BoolTrue => Ok(Expr::Literal(Value::Bool(true))),
+                Token::BoolFalse => Ok(Expr::Literal(Value::Bool(false))),
+                Token::StringLiteral(s) => Ok(Expr::Literal(Value::Str(s.clone()))),
+                Token::Identifier(name) => Ok(Expr::Variable(name.clone())),
+                Token::LeftParen => {
+                    let expr = Self::parse(parser)?;
+
+                    parser.expect(Token::RightParen)?;
+
+                    Ok(Expr::Group(Box::new(expr)))
+                }
+                Token::LeftBracket => {
+                    // Need to backtrack since we consumed the bracket
+                    parser.pos -= 1;
+
+                    Self::parse_array_literal(parser)
+                }
+                _ => Err(ParseError::UnexpectedToken {
+                    expected: Some("expression".to_string()),
+                    found: format!("{:?}", token_span.token),
+                    span: token_span.span.clone(),
+                    context: ErrorContext::from_span(source, &token_span.span),
+                }),
+            },
+            None => Err(parser.expected("expression")),
         }
     }
 
@@ -524,10 +347,18 @@ impl Expr {
         while parser.peek() != Some(&Token::RightBracket) {
             elements.push(Self::parse(parser)?);
 
-            if parser.peek() == Some(&Token::Comma) {
-                parser.advance();
-            } else if parser.peek() != Some(&Token::RightBracket) {
-                return Err(parser.error("Expected ',' or ']'", Some("',' or ']'")));
+            match parser.peek() {
+                Some(Token::Comma) => {
+                    parser.advance();
+                    // Handle trailing comma if configured
+                    if parser.config.allow_trailing_commas()
+                        && parser.peek() == Some(&Token::RightBracket)
+                    {
+                        break;
+                    }
+                }
+                Some(Token::RightBracket) => break,
+                _ => return Err(parser.expected("',' or ']'")),
             }
         }
 

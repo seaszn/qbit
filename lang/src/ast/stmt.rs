@@ -1,8 +1,10 @@
 use crate::{
     ast::expr::Expr,
     lexer::Token,
-    parser::{Parse, ParseError, Parser},
+    parser::{ErrorContext, Parse, ParseError, Parser},
 };
+
+use super::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
@@ -60,161 +62,140 @@ pub enum Stmt {
 }
 
 impl Stmt {
-    // /// Check if this statement can appear at the top level
-    // pub fn is_top_level(&self) -> bool {
-    //     matches!(
-    //         self,
-    //         Stmt::Function { .. }
-    //             | Stmt::Let { .. }
-    //             | Stmt::Const { .. }
-    //             | Stmt::Import { .. }
-    //             | Stmt::Export { .. }
-    //     )
-    // }
-
-    // /// Check if this statement creates a new scope
-    // pub fn creates_scope(&self) -> bool {
-    //     matches!(
-    //         self,
-    //         Stmt::Block { .. }
-    //             | Stmt::Function { .. }
-    //             | Stmt::If { .. }
-    //             | Stmt::While { .. }
-    //             | Stmt::For { .. }
-    //     )
-    // }
-
     fn parse_let(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Let)?;
+        let source = parser.source;
 
-        let current_pos = parser.pos;
-        let name = match parser.advance() {
-            Some(Token::Identifier(name)) => name.clone(),
-            Some(token) => {
-                return Err(ParseError::UnexpectedToken {
-                    position: current_pos,
-                    expected: Some("identifier".to_string()),
-                    found: format!("{:?}", token),
-                });
-            }
-            None => {
-                return Err(ParseError::UnexpectedEof {
-                    position: current_pos,
-                    expected: "identifier".to_string(),
-                });
-            }
-        };
+        parser.safe_call(|parser| {
+            parser.expect(Token::Let)?;
 
-        parser.expect(Token::Equal)?;
+            let name = match parser.advance() {
+                Some(token_span) => match &token_span.token {
+                    Token::Identifier(name) => name.clone(),
+                    _ => {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: Some("identifier".to_string()),
+                            found: format!("{:?}", token_span.token),
+                            span: token_span.span.clone(),
+                            context: ErrorContext::from_span(source, &token_span.span),
+                        });
+                    }
+                },
+                None => return Err(parser.expected("identifier")),
+            };
 
-        let value = Expr::parse(parser)?;
+            let value = match parser.peek() {
+                Some(Token::Equal) => {
+                    parser.expect(Token::Equal)?;
+                    Expr::parse(parser)?
+                }
+                _ => Expr::Literal(Value::Null),
+            };
 
-        parser.expect(Token::Semicolon)?;
+            parser.expect(Token::Semicolon)?;
 
-        Ok(Stmt::Let { name, value })
+            Ok(Stmt::Let { name, value })
+        })
     }
 
     fn parse_const(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Const)?;
+        let source = parser.source;
 
-        let current_pos = parser.pos;
-        let name = match parser.advance() {
-            Some(Token::Identifier(name)) => name.clone(),
-            Some(token) => {
-                return Err(ParseError::UnexpectedToken {
-                    position: current_pos,
-                    expected: Some("identifier".to_string()),
-                    found: format!("{:?}", token),
-                });
-            }
-            None => {
-                return Err(ParseError::UnexpectedEof {
-                    position: current_pos,
-                    expected: "identifier".to_string(),
-                });
-            }
-        };
+        parser.safe_call(|parser| {
+            parser.expect(Token::Const)?;
 
-        parser.expect(Token::Equal)?;
-        let value = Expr::parse(parser)?;
-        parser.expect(Token::Semicolon)?;
+            let name = match parser.advance() {
+                Some(token_span) => match &token_span.token {
+                    Token::Identifier(name) => name.clone(),
+                    _ => {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: Some("identifier".to_string()),
+                            found: format!("{:?}", token_span.token),
+                            span: token_span.span.clone(),
+                            context: ErrorContext::from_span(source, &token_span.span),
+                        });
+                    }
+                },
+                None => return Err(parser.expected("identifier")),
+            };
 
-        Ok(Stmt::Const { name, value })
+            parser.expect(Token::Equal)?;
+            let value = Expr::parse(parser)?;
+
+            parser.expect(Token::Semicolon)?;
+
+            Ok(Stmt::Const { name, value })
+        })
     }
 
     fn parse_function(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Fn)?;
+        let source = parser.source;
 
-        let curr_position = parser.pos;
-        let name = match parser.advance() {
-            Some(Token::Identifier(name)) => name.clone(),
-            other => {
-                return Err(ParseError::UnexpectedToken {
-                    position: curr_position,
-                    expected: Some("function name".to_string()),
-                    found: other
-                        .map(|t| format!("{:?}", t))
-                        .unwrap_or("EOF".to_string()),
-                });
-            }
-        };
+        parser.safe_call(|parser| {
+            parser.expect(Token::Fn)?;
 
-        parser.expect(Token::LeftParen)?;
-        let params = Self::parse_parameter_list(parser)?;
-        parser.expect(Token::RightParen)?;
+            let name = match parser.advance() {
+                Some(token_span) => match &token_span.token {
+                    Token::Identifier(name) => name.clone(),
+                    _ => {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: Some("function name".to_string()),
+                            found: format!("{:?}", token_span.token),
+                            span: token_span.span.clone(),
+                            context: ErrorContext::from_span(source, &token_span.span),
+                        });
+                    }
+                },
+                None => return Err(parser.expected("function name")),
+            };
 
-        let body = Self::parse_block(parser)?;
+            parser.expect(Token::LeftParen)?;
+            let params = Self::parse_parameter_list(parser)?;
 
-        Ok(Stmt::Function {
-            name,
-            params,
-            body: Box::new(body),
+            parser.expect(Token::RightParen)?;
+            let body = Self::parse_block(parser)?;
+
+            Ok(Stmt::Function {
+                name,
+                params,
+                body: Box::new(body),
+            })
         })
     }
 
     fn parse_parameter_list(parser: &mut Parser) -> Result<Vec<String>, ParseError> {
         let mut params = Vec::new();
+        let source = parser.source;
 
         while parser.peek() != Some(&Token::RightParen) {
-            let current_pos = parser.pos;
-
             match parser.advance() {
-                Some(Token::Identifier(param)) => {
-                    params.push(param.clone());
-                }
-                Some(token) => {
-                    return Err(ParseError::UnexpectedToken {
-                        position: current_pos,
-                        expected: Some("parameter name".to_string()),
-                        found: format!("{:?}", token),
-                    });
-                }
-                None => {
-                    return Err(ParseError::UnexpectedEof {
-                        position: current_pos,
-                        expected: "parameter name".to_string(),
-                    });
-                }
+                Some(token_span) => match &token_span.token {
+                    Token::Identifier(param) => {
+                        params.push(param.clone());
+                    }
+                    _ => {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: Some("parameter name".to_string()),
+                            found: format!("{:?}", token_span.token),
+                            span: token_span.span.clone(),
+                            context: ErrorContext::from_span(source, &token_span.span),
+                        });
+                    }
+                },
+                None => return Err(parser.expected("parameter name")),
             }
 
             match parser.peek() {
                 Some(Token::Comma) => {
                     parser.advance();
+                    // Handle trailing comma if configured
+                    if parser.config.allow_trailing_commas()
+                        && parser.peek() == Some(&Token::RightParen)
+                    {
+                        break;
+                    }
                 }
                 Some(Token::RightParen) => break,
-                Some(token) => {
-                    return Err(ParseError::UnexpectedToken {
-                        position: parser.pos,
-                        expected: Some("',' or ')'".to_string()),
-                        found: format!("{:?}", token),
-                    });
-                }
-                None => {
-                    return Err(ParseError::UnexpectedEof {
-                        position: parser.pos,
-                        expected: "',' or ')'".to_string(),
-                    });
-                }
+                _ => return Err(parser.expected("',' or ')'")),
             }
         }
 
@@ -222,138 +203,160 @@ impl Stmt {
     }
 
     fn parse_if(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::If)?;
-        let condition = Expr::parse(parser)?;
-        let then_branch = Self::parse_block(parser)?;
+        parser.safe_call(|parser| {
+            parser.expect(Token::If)?;
 
-        let else_branch = if parser.consume(&Token::Else) {
-            if parser.peek() == Some(&Token::If) {
-                Some(Box::new(Self::parse_if(parser)?))
-            } else {
-                Some(Box::new(Self::parse_block(parser)?))
-            }
-        } else {
-            None
-        };
+            let condition = Expr::parse(parser)?;
+            let then_branch = Self::parse_block(parser)?;
 
-        Ok(Stmt::If {
-            condition,
-            then_branch: Box::new(then_branch),
-            else_branch,
+            let else_branch = match parser.consume(&Token::Else) {
+                true => match parser.peek() {
+                    Some(Token::If) => Some(Box::new(Self::parse_if(parser)?)),
+                    _ => Some(Box::new(Self::parse_block(parser)?)),
+                },
+                false => None,
+            };
+
+            Ok(Stmt::If {
+                condition,
+                then_branch: Box::new(then_branch),
+                else_branch,
+            })
         })
     }
 
     fn parse_return(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Return)?;
+        parser.safe_call(|parser| {
+            parser.expect(Token::Return)?;
 
-        let value = if parser.peek() == Some(&Token::Semicolon) {
-            None
-        } else {
-            Some(Expr::parse(parser)?)
-        };
+            let value = match parser.peek() {
+                Some(Token::Semicolon) => None,
+                Some(_) => Some(Expr::parse(parser)?),
+                None => None,
+            };
 
-        parser.expect(Token::Semicolon)?;
-        Ok(Stmt::Return { value })
+            parser.expect(Token::Semicolon)?;
+            Ok(Stmt::Return { value })
+        })
     }
 
     fn parse_block(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::LeftBrace)?;
-        let mut statements = Vec::new();
+        parser.safe_call(|parser| {
+            parser.expect(Token::LeftBrace)?;
+            let mut statements = Vec::new();
 
-        while parser.peek() != Some(&Token::RightBrace) && !parser.is_at_end() {
-            statements.push(Self::parse(parser)?);
-        }
+            while parser.peek() != Some(&Token::RightBrace) && !parser.eof() {
+                statements.push(Self::parse(parser)?);
+            }
 
-        parser.expect(Token::RightBrace)?;
-        Ok(Stmt::Block { statements })
+            parser.expect(Token::RightBrace)?;
+            Ok(Stmt::Block { statements })
+        })
     }
 
     fn parse_import(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Import)?;
+        let source = parser.source;
 
-        let curr_position = parser.pos;
-        let module = match parser.advance() {
-            Some(Token::StringLiteral(module)) => module.clone(),
-            Some(Token::Identifier(module)) => module.clone(),
-            other => {
-                return Err(ParseError::UnexpectedToken {
-                    position: curr_position,
-                    expected: Some("module name".to_string()),
-                    found: other
-                        .map(|t| format!("{:?}", t))
-                        .unwrap_or("EOF".to_string()),
-                });
-            }
-        };
+        parser.safe_call(|parser| {
+            parser.expect(Token::Import)?;
 
-        parser.expect(Token::Semicolon)?;
-        Ok(Stmt::Import { module })
+            let module = match parser.advance() {
+                Some(token_span) => match &token_span.token {
+                    Token::StringLiteral(module) => module.clone(),
+                    Token::Identifier(module) => module.clone(),
+                    _ => {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: Some("module name".to_string()),
+                            found: format!("{:?}", token_span.token),
+                            span: token_span.span.clone(),
+                            context: ErrorContext::from_span(source, &token_span.span),
+                        });
+                    }
+                },
+                None => return Err(parser.expected("module name")),
+            };
+
+            parser.expect(Token::Semicolon)?;
+            Ok(Stmt::Import { module })
+        })
     }
 
     fn parse_export(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::Export)?;
-        let statement = Self::parse(parser)?;
-        Ok(Stmt::Export {
-            statement: Box::new(statement),
+        parser.safe_call(|parser| {
+            parser.expect(Token::Export)?;
+            let statement = Self::parse(parser)?;
+            Ok(Stmt::Export {
+                statement: Box::new(statement),
+            })
         })
     }
 
     fn parse_expression_stmt(parser: &mut Parser) -> Result<Self, ParseError> {
-        let expr = Expr::parse(parser)?;
-        parser.expect(Token::Semicolon)?;
-        Ok(Stmt::Expression { expr })
+        parser.safe_call(|parser| {
+            let expr = Expr::parse(parser)?;
+            parser.expect(Token::Semicolon)?;
+            Ok(Stmt::Expression { expr })
+        })
     }
 
     fn parse_while(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::While)?;
+        parser.safe_call(|parser| {
+            parser.expect(Token::While)?;
+            let condition = Expr::parse(parser)?;
+            let body = Self::parse_block(parser)?;
 
-        let condition = Expr::parse(parser)?;
-        let body = Self::parse_block(parser)?;
-
-        Ok(Stmt::While {
-            condition,
-            body: Box::new(body),
+            Ok(Stmt::While {
+                condition,
+                body: Box::new(body),
+            })
         })
     }
 
     fn parse_for(parser: &mut Parser) -> Result<Self, ParseError> {
-        parser.expect(Token::For)?;
-        parser.expect(Token::LeftParen)?;
+        parser.safe_call(|parser| {
+            parser.expect(Token::For)?;
+            parser.expect(Token::LeftParen)?;
 
-        // Parse init (optional)
-        let init = if parser.peek() == Some(&Token::Semicolon) {
-            parser.advance(); // consume semicolon
-            None
-        } else {
-            let init_stmt = Self::parse(parser)?;
-            Some(Box::new(init_stmt))
-        };
+            // Parse init (optional)
+            let init = match parser.peek() {
+                Some(Token::Semicolon) => {
+                    parser.advance(); // consume semicolon
+                    None
+                }
+                _ => {
+                    let init_stmt = Self::parse(parser)?;
+                    Some(Box::new(init_stmt))
+                }
+            };
 
-        // Parse condition (optional)
-        let condition = if parser.peek() == Some(&Token::Semicolon) {
-            parser.advance(); // consume semicolon
-            None
-        } else {
-            let cond = Expr::parse(parser)?;
-            parser.expect(Token::Semicolon)?;
-            Some(cond)
-        };
+            // Parse condition (optional)
+            let condition = match parser.peek() {
+                Some(Token::Semicolon) => {
+                    parser.advance(); // consume semicolon
+                    None
+                }
+                _ => {
+                    let cond = Expr::parse(parser)?;
+                    parser.expect(Token::Semicolon)?;
+                    Some(cond)
+                }
+            };
 
-        // Parse update (optional)
-        let update = if parser.peek() == Some(&Token::RightParen) {
-            None
-        } else {
-            Some(Expr::parse(parser)?)
-        };
+            // Parse update (optional)
+            let update = match parser.peek() {
+                Some(Token::RightParen) => None,
+                _ => Some(Expr::parse(parser)?),
+            };
 
-        parser.expect(Token::RightParen)?;
-        let body = Self::parse_block(parser)?;
+            parser.expect(Token::RightParen)?;
+            let body = Self::parse_block(parser)?;
 
-        Ok(Stmt::For {
-            init,
-            condition,
-            update,
-            body: Box::new(body),
+            Ok(Stmt::For {
+                init,
+                condition,
+                update,
+                body: Box::new(body),
+            })
         })
     }
 
