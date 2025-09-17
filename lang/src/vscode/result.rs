@@ -1,8 +1,10 @@
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 use serde::{Deserialize, Serialize};
 
 #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 use crate::parser::{ParseError, ParseResult};
 
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 #[derive(Serialize, Deserialize)]
 pub struct VsCodeError {
     pub message: String,

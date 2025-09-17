@@ -29,6 +29,7 @@ impl Deref for TokenSpan {
     }
 }
 
+#[derive(Debug)]
 pub struct ParseResult {
     statements: Vec<Stmt>,
     warnings: Vec<ParseWarning>,
@@ -37,6 +38,9 @@ pub struct ParseResult {
 impl ParseResult {
     pub fn statements(&self) -> &[Stmt] {
         &self.statements
+    }
+    pub fn warnings(&self) -> &[ParseWarning] {
+        &self.warnings
     }
 }
 
@@ -200,26 +204,41 @@ impl<'a> Parser<'a> {
             let statement = self.safe_call(|parser| Stmt::parse(parser))?;
 
             match (self.current(), &statement) {
-                (Some(token_span), Stmt::Let { name, .. }) if !name.is_snake_case() => {
+                (token_span, Stmt::Let { name, .. }) if !name.is_snake_case() => {
+                    let span = match token_span.map(|x| &x.span) {
+                        Some(res) => res,
+                        None => &(self.pos..self.pos),
+                    };
+
                     warnings.push(ParseWarning::NamingConvention {
                         message: format!("expected {}", name.to_snake_case()),
-                        span: token_span.span.clone(),
-                        context: DebugContext::from_span(self.source, &token_span.span),
-                    })
+                        span: span.clone(),
+                        context: DebugContext::from_span(self.source, span),
+                    });
                 }
-                (Some(token_span), Stmt::Const { name, .. }) if !name.is_constant_case() => {
+                (token_span, Stmt::Const { name, .. }) if !name.is_constant_case() => {
+                    let span = match token_span.map(|x| &x.span) {
+                        Some(res) => res,
+                        None => &(self.pos..self.pos),
+                    };
+
                     warnings.push(ParseWarning::NamingConvention {
                         message: format!("expected {}", name.to_constant_case()),
-                        span: token_span.span.clone(),
-                        context: DebugContext::from_span(self.source, &token_span.span),
-                    })
+                        span: span.clone(),
+                        context: DebugContext::from_span(self.source, span),
+                    });
                 }
-                (Some(token_span), Stmt::Function { name, .. }) if !name.is_snake_case() => {
+                (token_span, Stmt::Function { name, .. }) if !name.is_snake_case() => {
+                    let span = match token_span.map(|x| &x.span) {
+                        Some(res) => res,
+                        None => &(self.pos..self.pos),
+                    };
+
                     warnings.push(ParseWarning::NamingConvention {
                         message: format!("expected {}", name.is_snake_case()),
-                        span: token_span.span.clone(),
-                        context: DebugContext::from_span(self.source, &token_span.span),
-                    })
+                        span: span.clone(),
+                        context: DebugContext::from_span(self.source, &span),
+                    });
                 }
                 _ => (),
             };
