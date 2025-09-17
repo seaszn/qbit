@@ -232,7 +232,7 @@ impl Expr {
                 }
                 Some(Token::Dot) => {
                     let source = parser.source;
-                    
+
                     parser.advance();
 
                     match parser.advance() {
@@ -253,7 +253,7 @@ impl Expr {
                             }
                         },
                         None => {
-                            return Err(parser.expected("property name"));
+                            return Err(parser.error("", Some("property name")));
                         }
                     }
                 }
@@ -298,7 +298,7 @@ impl Expr {
                     }
                 }
                 Some(Token::RightParen) => break,
-                _ => return Err(parser.expected("',' or ')'")),
+                _ => return Err(parser.error("", Some("',' or ')'"))),
             }
         }
 
@@ -336,7 +336,7 @@ impl Expr {
                     context: DebugContext::from_span(source, &token_span.span),
                 }),
             },
-            None => Err(parser.expected("expression")),
+            None => Err(parser.error("", Some("expression"))),
         }
     }
 
@@ -358,7 +358,7 @@ impl Expr {
                     }
                 }
                 Some(Token::RightBracket) => break,
-                _ => return Err(parser.expected("',' or ']'")),
+                _ => return Err(parser.error("", Some("',' or ']'"))),
             }
         }
 

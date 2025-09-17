@@ -55,6 +55,21 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    fn eof_position(&self) -> usize {
+        self.tokens.last().map(|pt| pt.span.end).unwrap_or(0)
+    }
+
+    fn span(&self) -> Option<&TokenSpan> {
+        let mut pos = self.pos;
+        while let Some(token_span) = self.tokens.get(pos) {
+            match token_span.is_comment() {
+                true => pos += 1,
+                false => return Some(token_span),
+            }
+        }
+        None
+    }
+
     pub fn builder(source: &'a str) -> ParserBuilder<'a> {
         ParserBuilder::new(source)
     }
@@ -79,62 +94,45 @@ impl<'a> Parser<'a> {
         parser.safe_call(|p| Stmt::parse(p))
     }
 
-    fn eof_position(&self) -> usize {
-        self.tokens.last().map(|pt| pt.span.end).unwrap_or(0)
-    }
-
     pub fn eof(&self) -> bool {
-        self.current().is_none() // Use current() which already skips comments
-    }
-
-    pub fn current(&self) -> Option<&TokenSpan> {
-        let mut pos = self.pos;
-        while let Some(token_span) = self.tokens.get(pos) {
-            match token_span.is_comment() {
-                true => pos += 1,
-                false => return Some(token_span),
-            }
-        }
-        None
-    }
-
-    pub fn current_span(&self) -> Option<Range<usize>> {
-        self.current().map(|pt| pt.span.clone())
-    }
-
-    pub fn current_position(&self) -> usize {
-        match self.current() {
-            Some(ts) => ts.span.start,
-            None => self.eof_position(),
-        }
+        self.span().is_none() // Use current() which already skips comments
     }
 
     pub fn peek(&self) -> Option<&Token> {
-        self.current().map(|ts| &ts.token)
+        self.span().map(|ts| &ts.token)
     }
 
-    pub fn peek_ahead(&self, n: usize) -> Option<&Token> {
-        let mut pos = self.pos;
-        let mut count = 0;
-
-        while let Some(token_span) = self.tokens.get(pos) {
-            match token_span.is_comment() {
-                false => match count == n {
-                    true => return Some(&token_span.token),
-                    false => count += 1,
-                },
-                true => {}
+    pub fn error(&self, message: &str, expected: Option<&str>) -> ParseError {
+        match (self.span(), expected) {
+            (Some(token_span), Some(exp)) => ParseError::UnexpectedToken {
+                expected: Some(exp.to_string()),
+                found: format!("{:?}", token_span.token),
+                span: token_span.span.clone(),
+                context: DebugContext::from_span(self.source, &token_span.span),
+            },
+            (Some(token_span), None) => ParseError::InvalidSyntax {
+                message: message.to_string(),
+                span: token_span.span.clone(),
+                context: DebugContext::from_span(self.source, &token_span.span),
+            },
+            (None, Some(exp)) => {
+                let position = self.eof_position();
+                ParseError::UnexpectedEof {
+                    expected: exp.to_string(),
+                    position,
+                    context: DebugContext::from_span(self.source, &(position..position)),
+                }
             }
+            (None, None) => {
+                let position = self.eof_position();
 
-            pos += 1;
-
-            match pos > self.pos + self.tokens.len() {
-                true => break,
-                false => {}
+                ParseError::UnexpectedEof {
+                    expected: "token".to_string(),
+                    position,
+                    context: DebugContext::from_span(self.source, &(position..position)),
+                }
             }
         }
-
-        None
     }
 
     pub fn advance(&mut self) -> Option<&TokenSpan> {
@@ -203,7 +201,8 @@ impl<'a> Parser<'a> {
         while !self.eof() {
             let statement = self.safe_call(|parser| Stmt::parse(parser))?;
 
-            match (self.current(), &statement) {
+            // Check for each statement if we need to generate a naming convention warning
+            match (self.span(), &statement) {
                 (token_span, Stmt::Let { name, .. }) if !name.is_snake_case() => {
                     let span = match token_span.map(|x| &x.span) {
                         Some(res) => res,
@@ -246,6 +245,10 @@ impl<'a> Parser<'a> {
             statements.push(statement);
         }
 
+        // for stmt in &statements {
+
+        // }
+
         let result = ParseResult {
             statements,
             warnings,
@@ -263,50 +266,16 @@ impl<'a> Parser<'a> {
         let result = match self.depth > self.config.max_recursion_depth {
             true => Err(ParseError::TooMuchRecursion {
                 max_depth: self.config.max_recursion_depth,
-                position: self.current_position(),
+                position: match self.span() {
+                    Some(ts) => ts.span.start,
+                    None => self.eof_position(),
+                },
             }),
             false => f(self),
         };
 
         self.depth = self.depth.saturating_sub(1);
         result
-    }
-
-    fn error(&self, message: &str, expected: Option<&str>) -> ParseError {
-        match (self.current(), expected) {
-            (Some(token_span), Some(exp)) => ParseError::UnexpectedToken {
-                expected: Some(exp.to_string()),
-                found: format!("{:?}", token_span.token),
-                span: token_span.span.clone(),
-                context: DebugContext::from_span(self.source, &token_span.span),
-            },
-            (Some(token_span), None) => ParseError::InvalidSyntax {
-                message: message.to_string(),
-                span: token_span.span.clone(),
-                context: DebugContext::from_span(self.source, &token_span.span),
-            },
-            (None, Some(exp)) => {
-                let position = self.eof_position();
-                ParseError::UnexpectedEof {
-                    expected: exp.to_string(),
-                    position,
-                    context: DebugContext::from_span(self.source, &(position..position)),
-                }
-            }
-            (None, None) => {
-                let position = self.eof_position();
-
-                ParseError::UnexpectedEof {
-                    expected: "token".to_string(),
-                    position,
-                    context: DebugContext::from_span(self.source, &(position..position)),
-                }
-            }
-        }
-    }
-
-    pub fn expected(&self, expected: &str) -> ParseError {
-        self.error("", Some(expected))
     }
 }
 

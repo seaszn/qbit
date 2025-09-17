@@ -80,7 +80,7 @@ impl Stmt {
                         });
                     }
                 },
-                None => return Err(parser.expected("identifier")),
+                None => return Err(parser.error("", Some("identifier"))),
             };
 
             let value = match parser.peek() {
@@ -115,7 +115,7 @@ impl Stmt {
                         });
                     }
                 },
-                None => return Err(parser.expected("identifier")),
+                None => return Err(parser.error("", Some("identifier"))),
             };
 
             parser.expect(Token::Equal)?;
@@ -145,7 +145,7 @@ impl Stmt {
                         });
                     }
                 },
-                None => return Err(parser.expected("function name")),
+                None => return Err(parser.error("", Some("function name"))),
             };
 
             parser.expect(Token::LeftParen)?;
@@ -181,7 +181,7 @@ impl Stmt {
                         });
                     }
                 },
-                None => return Err(parser.expected("parameter name")),
+                None => return Err(parser.error("", Some("parameter name"))),
             }
 
             match parser.peek() {
@@ -195,7 +195,7 @@ impl Stmt {
                     }
                 }
                 Some(Token::RightParen) => break,
-                _ => return Err(parser.expected("',' or ')'")),
+                _ => return Err(parser.error("", Some("',' or ')'"))),
             }
         }
 
@@ -273,7 +273,7 @@ impl Stmt {
                         });
                     }
                 },
-                None => return Err(parser.expected("module name")),
+                None => return Err(parser.error("", Some("module name"))),
             };
 
             parser.expect(Token::Semicolon)?;
