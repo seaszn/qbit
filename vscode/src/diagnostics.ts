@@ -1,8 +1,7 @@
-// src/diagnostics.ts
 import * as vscode from 'vscode';
-import { QbitParser, ParseError } from './parser';
+import { Parser, ParseError } from './parser';
 
-export class QbitDiagnosticsProvider {
+export class DiagnosticsProvider {
     private diagnosticCollection: vscode.DiagnosticCollection;
 
     constructor() {
@@ -15,7 +14,7 @@ export class QbitDiagnosticsProvider {
         }
 
         try {
-            const errors = await QbitParser.validateSyntax(document.getText());
+            const errors = await Parser.validateSyntax(document.getText());
             const diagnostics: vscode.Diagnostic[] = errors.map(error => {
                 const range = new vscode.Range(
                     new vscode.Position(Math.max(0, error.line - 1), Math.max(0, error.column - 1)),
@@ -35,7 +34,6 @@ export class QbitDiagnosticsProvider {
             this.diagnosticCollection.set(document.uri, diagnostics);
         } catch (err) {
             console.error('Error updating diagnostics:', err);
-            // Clear diagnostics on error
             this.diagnosticCollection.set(document.uri, []);
         }
     }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "wasm")]
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 use crate::parser::{ParseError, ParseResult};
 
 #[derive(Serialize, Deserialize)]
@@ -11,7 +11,7 @@ pub struct VsCodeError {
     pub length: usize,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 impl From<ParseError> for VsCodeError {
     fn from(value: ParseError) -> Self {
         match &value {
@@ -59,14 +59,14 @@ impl From<ParseError> for VsCodeError {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 #[derive(Serialize, Deserialize)]
 pub struct VsCodeResult {
     success: bool,
     errors: Vec<VsCodeError>,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
 impl From<Result<ParseResult, ParseError>> for VsCodeResult {
     fn from(value: Result<ParseResult, ParseError>) -> Self {
         match value {

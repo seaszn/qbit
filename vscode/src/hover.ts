@@ -1,8 +1,7 @@
-// src/hover.ts
 import * as vscode from 'vscode';
-import { QbitParser } from './parser';
+import { Parser } from './parser';
 
-export class QbitHoverProvider implements vscode.HoverProvider {
+export class HoverProvider implements vscode.HoverProvider {
     
     async provideHover(
         document: vscode.TextDocument,
@@ -13,14 +12,12 @@ export class QbitHoverProvider implements vscode.HoverProvider {
         const line = position.line;
         const character = position.character;
 
-        // Get the symbol at the current position
-        const symbol = QbitParser.getSymbolAtPosition(source, line, character);
+        const symbol = Parser.getSymbolAtPosition(source, line, character);
         if (!symbol) {
             return undefined;
         }
 
-        // Check if it's a function definition
-        const functions = QbitParser.getFunctionDefinitions(source);
+        const functions = Parser.getFunctionDefinitions(source);
         const functionDef = functions.find(f => f.name === symbol);
         if (functionDef) {
             const paramsStr = functionDef.params.length > 0 
@@ -34,8 +31,7 @@ export class QbitHoverProvider implements vscode.HoverProvider {
             return new vscode.Hover(markdown);
         }
 
-        // Check if it's a variable declaration
-        const variables = QbitParser.getVariableDeclarations(source);
+        const variables = Parser.getVariableDeclarations(source);
         const variableDef = variables.find(v => v.name === symbol);
         if (variableDef) {
             const markdown = new vscode.MarkdownString();
@@ -45,11 +41,7 @@ export class QbitHoverProvider implements vscode.HoverProvider {
             return new vscode.Hover(markdown);
         }
 
-        // Check if it's a built-in keyword
-        const keywords = [
-            'let', 'const', 'fn', 'if', 'else', 'while', 'for', 'return', 
-            'break', 'continue', 'import', 'export', 'true', 'false', 'null'
-        ];
+        const keywords = ['let', 'const', 'fn', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'import', 'export', 'true', 'false', 'null'];
         
         if (keywords.includes(symbol)) {
             const descriptions: { [key: string]: string } = {
@@ -78,7 +70,6 @@ export class QbitHoverProvider implements vscode.HoverProvider {
             return new vscode.Hover(markdown);
         }
 
-        // Default hover for unknown symbols
         const markdown = new vscode.MarkdownString();
         markdown.appendText(`Symbol: ${symbol}`);
         return new vscode.Hover(markdown);
