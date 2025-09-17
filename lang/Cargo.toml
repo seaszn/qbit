@@ -3,11 +3,24 @@ name = "qbit-lang"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+wasm = ["serde-wasm-bindgen", "console_error_panic_hook", "wee_alloc"]
+
 [dependencies]
+wee_alloc = { version = "0.4", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+
 lexer = "0.1.18"
 logos = "0.15.0"
 thiserror = { workspace = true }
+inflections = { workspace = true }
+wasm-bindgen = { version = "0.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+
 
 [lib]
+crate-type = ["cdylib", "rlib"]
 name = "qbit_lang"
 path = "src/lib.rs"

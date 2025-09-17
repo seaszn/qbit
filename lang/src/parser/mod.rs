@@ -1,16 +1,18 @@
 use crate::{
     ast::{expr::Expr, stmt::Stmt},
     lexer::Token,
+    parser::debug::ParseWarning,
 };
 use std::ops::{Deref, Range};
 
 mod builder;
 mod config;
-mod error;
+mod debug;
 
 pub use builder::ParserBuilder;
 pub use config::ParserConfig;
-pub use error::{ErrorContext, ParseError};
+pub use debug::{DebugContext, ParseError};
+use inflections::Inflect;
 
 /// Enhanced token with source position information
 #[derive(Debug, Clone)]
@@ -27,12 +29,23 @@ impl Deref for TokenSpan {
     }
 }
 
+pub struct ParseResult {
+    statements: Vec<Stmt>,
+    warnings: Vec<ParseWarning>,
+}
+
+impl ParseResult {
+    pub fn statements(&self) -> &[Stmt] {
+        &self.statements
+    }
+}
+
 /// Parser with configuration and safety features
 #[derive(Clone)]
 pub struct Parser<'a> {
+    pub tokens: Vec<TokenSpan>,
     pub config: ParserConfig,
     pub source: &'a str,
-    pub tokens: Vec<TokenSpan>,
     pub pos: usize,
     depth: usize,
 }
@@ -42,7 +55,7 @@ impl<'a> Parser<'a> {
         ParserBuilder::new(source)
     }
 
-    pub fn parse_src(source: &'a str) -> Result<Vec<Stmt>, ParseError> {
+    pub fn parse_src(source: &'a str) -> Result<ParseResult, ParseError> {
         let mut parser = Self::builder(source).build()?;
         parser.parse()
     }
@@ -164,7 +177,7 @@ impl<'a> Parser<'a> {
                     expected: Some(format!("{:?}", expected)),
                     found: format!("{:?}", token.token),
                     span: token.span.clone(),
-                    context: ErrorContext::from_span(source, &token.span),
+                    context: DebugContext::from_span(source, &token.span),
                 }),
             },
             None => {
@@ -173,20 +186,53 @@ impl<'a> Parser<'a> {
                 Err(ParseError::UnexpectedEof {
                     position,
                     expected: format!("{:?}", expected),
-                    context: ErrorContext::from_span(source, &(position..position)),
+                    context: DebugContext::from_span(source, &(position..position)),
                 })
             }
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
+    pub fn parse(&mut self) -> Result<ParseResult, ParseError> {
         let mut statements = Vec::new();
+        let mut warnings = vec![];
 
         while !self.eof() {
-            statements.push(self.safe_call(|parser| Stmt::parse(parser))?);
+            let statement = self.safe_call(|parser| Stmt::parse(parser))?;
+
+            match (self.current(), &statement) {
+                (Some(token_span), Stmt::Let { name, .. }) if !name.is_snake_case() => {
+                    warnings.push(ParseWarning::NamingConvention {
+                        message: format!("expected {}", name.to_snake_case()),
+                        span: token_span.span.clone(),
+                        context: DebugContext::from_span(self.source, &token_span.span),
+                    })
+                }
+                (Some(token_span), Stmt::Const { name, .. }) if !name.is_constant_case() => {
+                    warnings.push(ParseWarning::NamingConvention {
+                        message: format!("expected {}", name.to_constant_case()),
+                        span: token_span.span.clone(),
+                        context: DebugContext::from_span(self.source, &token_span.span),
+                    })
+                }
+                (Some(token_span), Stmt::Function { name, .. }) if !name.is_snake_case() => {
+                    warnings.push(ParseWarning::NamingConvention {
+                        message: format!("expected {}", name.is_snake_case()),
+                        span: token_span.span.clone(),
+                        context: DebugContext::from_span(self.source, &token_span.span),
+                    })
+                }
+                _ => (),
+            };
+
+            statements.push(statement);
         }
 
-        Ok(statements)
+        let result = ParseResult {
+            statements,
+            warnings,
+        };
+
+        Ok(result)
     }
 
     pub fn safe_call<T, F>(&mut self, f: F) -> Result<T, ParseError>
@@ -207,25 +253,25 @@ impl<'a> Parser<'a> {
         result
     }
 
-    pub fn error(&self, message: &str, expected: Option<&str>) -> ParseError {
+    fn error(&self, message: &str, expected: Option<&str>) -> ParseError {
         match (self.current(), expected) {
             (Some(token_span), Some(exp)) => ParseError::UnexpectedToken {
                 expected: Some(exp.to_string()),
                 found: format!("{:?}", token_span.token),
                 span: token_span.span.clone(),
-                context: ErrorContext::from_span(self.source, &token_span.span),
+                context: DebugContext::from_span(self.source, &token_span.span),
             },
             (Some(token_span), None) => ParseError::InvalidSyntax {
                 message: message.to_string(),
                 span: token_span.span.clone(),
-                context: ErrorContext::from_span(self.source, &token_span.span),
+                context: DebugContext::from_span(self.source, &token_span.span),
             },
             (None, Some(exp)) => {
                 let position = self.eof_position();
                 ParseError::UnexpectedEof {
                     expected: exp.to_string(),
                     position,
-                    context: ErrorContext::from_span(self.source, &(position..position)),
+                    context: DebugContext::from_span(self.source, &(position..position)),
                 }
             }
             (None, None) => {
@@ -234,7 +280,7 @@ impl<'a> Parser<'a> {
                 ParseError::UnexpectedEof {
                     expected: "token".to_string(),
                     position,
-                    context: ErrorContext::from_span(self.source, &(position..position)),
+                    context: DebugContext::from_span(self.source, &(position..position)),
                 }
             }
         }

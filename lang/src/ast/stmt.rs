@@ -1,7 +1,7 @@
 use crate::{
     ast::expr::Expr,
     lexer::Token,
-    parser::{ErrorContext, Parse, ParseError, Parser},
+    parser::{DebugContext, Parse, ParseError, Parser},
 };
 
 use super::value::Value;
@@ -76,7 +76,7 @@ impl Stmt {
                             expected: Some("identifier".to_string()),
                             found: format!("{:?}", token_span.token),
                             span: token_span.span.clone(),
-                            context: ErrorContext::from_span(source, &token_span.span),
+                            context: DebugContext::from_span(source, &token_span.span),
                         });
                     }
                 },
@@ -111,7 +111,7 @@ impl Stmt {
                             expected: Some("identifier".to_string()),
                             found: format!("{:?}", token_span.token),
                             span: token_span.span.clone(),
-                            context: ErrorContext::from_span(source, &token_span.span),
+                            context: DebugContext::from_span(source, &token_span.span),
                         });
                     }
                 },
@@ -141,7 +141,7 @@ impl Stmt {
                             expected: Some("function name".to_string()),
                             found: format!("{:?}", token_span.token),
                             span: token_span.span.clone(),
-                            context: ErrorContext::from_span(source, &token_span.span),
+                            context: DebugContext::from_span(source, &token_span.span),
                         });
                     }
                 },
@@ -177,7 +177,7 @@ impl Stmt {
                             expected: Some("parameter name".to_string()),
                             found: format!("{:?}", token_span.token),
                             span: token_span.span.clone(),
-                            context: ErrorContext::from_span(source, &token_span.span),
+                            context: DebugContext::from_span(source, &token_span.span),
                         });
                     }
                 },
@@ -269,7 +269,7 @@ impl Stmt {
                             expected: Some("module name".to_string()),
                             found: format!("{:?}", token_span.token),
                             span: token_span.span.clone(),
-                            context: ErrorContext::from_span(source, &token_span.span),
+                            context: DebugContext::from_span(source, &token_span.span),
                         });
                     }
                 },

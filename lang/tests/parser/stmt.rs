@@ -736,10 +736,10 @@ fn nesting_stmt() {
     )
     .unwrap();
 
-    assert_eq!(program.len(), 3);
+    assert_eq!(program.statements().len(), 3);
 
     // Test fibonacci function
-    let (fib_params, fib_body) = assert_stmt::function_stmt(&program[0], "fibonacci", 1);
+    let (fib_params, fib_body) = assert_stmt::function_stmt(&program.statements()[0], "fibonacci", 1);
     assert_eq!(fib_params[0], "n");
 
     let fib_statements = assert_stmt::block_stmt(fib_body, 1);
@@ -778,7 +778,7 @@ fn nesting_stmt() {
     assert_expr::literal_int(sub_right2, 2);
 
     // Test main function
-    let (main_params, main_body) = assert_stmt::function_stmt(&program[1], "main", 0);
+    let (main_params, main_body) = assert_stmt::function_stmt(&program.statements()[1], "main", 0);
     assert_eq!(main_params.len(), 0);
 
     let main_statements = assert_stmt::block_stmt(main_body, 3);
@@ -856,7 +856,7 @@ fn nesting_stmt() {
     assert_expr::variable(&process_args[0], "input");
 
     // Test export utility function
-    let exported = assert_stmt::export_stmt(&program[2]);
+    let exported = assert_stmt::export_stmt(&program.statements()[2]);
     let (utility_params, utility_body) = assert_stmt::function_stmt(exported, "utility", 0);
     assert_eq!(utility_params.len(), 0);
 

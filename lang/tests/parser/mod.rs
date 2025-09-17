@@ -1,6 +1,6 @@
 use qbit_lang::{
     ast::{expr::Expr, stmt::Stmt},
-    parser::{ParseError, Parser},
+    parser::{ParseError, ParseResult, Parser},
 };
 
 mod expr;
@@ -17,7 +17,7 @@ impl TestHelper {
         Parser::parse_stmt(source)
     }
 
-    pub fn src(source: &str) -> Result<Vec<Stmt>, ParseError> {
+    pub fn src(source: &str) -> Result<ParseResult, ParseError> {
         Parser::parse_src(source)
     }
 
@@ -50,7 +50,6 @@ impl TestHelper {
         );
     }
 }
-
 
 mod assert_expr {
     use qbit_lang::ast::{

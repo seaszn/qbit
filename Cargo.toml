@@ -1,8 +1,10 @@
 [workspace]
 name = "qbit"
 members = ["lang", "cli"]
+resolver = "3"
 
 [workspace.dependencies]
 pest = "2.7"
 pest_derive = "2.7"
 thiserror = "2.0.12"
+inflections = "1.1.1"

@@ -1,4 +1,6 @@
 mod error;
+mod vscode;
+
 pub mod lexer;
 pub mod parser;
 
