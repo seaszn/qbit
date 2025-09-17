@@ -211,7 +211,7 @@ impl<'a> Parser<'a> {
                     };
 
                     warnings.push(ParseWarning::NamingConvention {
-                        message: format!("expected {}", name.to_snake_case()),
+                        message: format!("expected '{}'", name.to_snake_case()),
                         span: span.clone(),
                         context: DebugContext::from_span(self.source, span),
                     });
@@ -223,7 +223,7 @@ impl<'a> Parser<'a> {
                     };
 
                     warnings.push(ParseWarning::NamingConvention {
-                        message: format!("expected {}", name.to_constant_case()),
+                        message: format!("expected '{}'", name.to_constant_case()),
                         span: span.clone(),
                         context: DebugContext::from_span(self.source, span),
                     });
@@ -235,7 +235,7 @@ impl<'a> Parser<'a> {
                     };
 
                     warnings.push(ParseWarning::NamingConvention {
-                        message: format!("expected {}", name.is_snake_case()),
+                        message: format!("expected '{}'", name.to_snake_case()),
                         span: span.clone(),
                         context: DebugContext::from_span(self.source, &span),
                     });
