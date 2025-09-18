@@ -1,13 +1,19 @@
 use qbit_lang::parser::Parser;
 
 fn main() -> Result<(), String> {
-    let result = Parser::parse_src(r#"let Ss = "tt"; fn Test(){}"#);
+    let result = Parser::parse_src(
+        r#"let S  = "";
+
+fn test() {
+   let tt = "";
+}"#,
+    );
 
     match result {
         Ok(res) => {
             println!("{:#?}", res.statements());
             println!("{:#?}", res.diagnositcs());
-        },
+        }
         Err(err) => println!("{err:?}"),
     }
 

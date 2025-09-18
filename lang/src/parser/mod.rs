@@ -57,6 +57,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     fn span(&self) -> Option<&TokenSpan> {
         let mut pos = self.pos;
+
         while let Some(token_span) = self.tokens.get(pos) {
             match token_span.is_comment() {
                 true => pos += 1,
@@ -67,19 +68,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse(&mut self) -> Result<ParseResult, ParseError> {
+        let mut statements: Vec<Stmt> = vec![];
         let mut analyzer = Analyzer::new(self.source);
 
         while !self.eof() {
-            let statement = self.safe_call(|parser| Stmt::parse(parser))?;
             let span = match self.span().map(|x| &x.span) {
-                Some(res) => res,
-                None => &(self.pos..self.pos),
+                Some(res) => res.clone(),
+                None => self.pos..self.pos,
             };
 
-            analyzer.analyze(statement, span);
+            let statement = self.safe_call(|parser| Stmt::parse(parser))?;
+
+            analyzer.analyze(&statement, &span);
+            statements.push(statement);
         }
 
-        Ok(analyzer.finalize())
+        let diagnostics = analyzer.finalize();
+
+        Ok(ParseResult {
+            diagnostics,
+            statements,
+        })
     }
 
     pub(crate) fn eof(&self) -> bool {

@@ -37,26 +37,24 @@ pub enum ParseWarning {
 impl std::fmt::Display for ParseWarning {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParseWarning::UnusedVariable { name, context, .. } => {
+            ParseWarning::UnusedVariable { name, .. } => {
                 write!(f, "Variable '{}' is declared but never used", name)?;
-                write!(f, "\n{}", context)?;
+                // write!(f, "\n{}", context)?;
                 Ok(())
             }
-            ParseWarning::UnusedFunction { name, context, .. } => {
+            ParseWarning::UnusedFunction { name, .. } => {
                 write!(f, "Function '{}' is declared but never used", name)?;
-                write!(f, "\n{}", context)?;
+                // write!(f, "\n{}", context)?;
                 Ok(())
             }
-            ParseWarning::UnreachableCode { context, .. } => {
+            ParseWarning::UnreachableCode { .. } => {
                 write!(f, "Unreachable code")?;
-                write!(f, "\n{}", context)?;
+                // write!(f, "\n{}", context)?;
                 Ok(())
             }
-            ParseWarning::NamingConvention {
-                message, context, ..
-            } => {
+            ParseWarning::NamingConvention { message, .. } => {
                 write!(f, "{}", message)?;
-                write!(f, "\n{}", context)?;
+                // write!(f, "\n{}", context)?;
                 Ok(())
             }
         }

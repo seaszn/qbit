@@ -40,7 +40,7 @@ pub enum ParseError {
         span: Range<usize>,
         context: ParseContext,
     },
-    
+
     /// Too much recursion (stack overflow prevention)
     TooMuchRecursion { max_depth: usize, position: usize },
 }
@@ -51,50 +51,40 @@ impl std::fmt::Display for ParseError {
             ParseError::BuildError {
                 message,
                 invalid_text,
-                context,
                 ..
             } => {
                 write!(f, "Lexer error: {} ('{}')", message, invalid_text)?;
-                write!(f, "\n{context:?}")?;
+                // write!(f, "\n{context:?}")?;
 
                 Ok(())
             }
             ParseError::UnexpectedToken {
-                expected,
-                found,
-                context,
-                ..
+                expected, found, ..
             } => {
                 match expected {
                     Some(exp) => write!(f, "Expected {}, found {}", exp, found)?,
                     None => write!(f, "Unexpected token {found}")?,
                 }
 
-                write!(f, "\n{context}")?;
-                
+                // write!(f, "\n{context}")?;
+
                 Ok(())
             }
-            ParseError::UnexpectedEof {
-                expected, context, ..
-            } => {
+            ParseError::UnexpectedEof { expected, .. } => {
                 write!(f, "Unexpected end of file, expected {}", expected)?;
-                write!(f, "\n{context}")?;
+                // write!(f, "\n{context}")?;
 
                 Ok(())
             }
-            ParseError::InvalidSyntax {
-                message, context, ..
-            } => {
+            ParseError::InvalidSyntax { message, .. } => {
                 write!(f, "Syntax error: {}", message)?;
-                write!(f, "\n{context}")?;
+                // write!(f, "\n{context}")?;
 
                 Ok(())
             }
-            ParseError::MissingToken {
-                expected, context, ..
-            } => {
+            ParseError::MissingToken { expected, .. } => {
                 write!(f, "Missing {expected}")?;
-                write!(f, "\n{context}")?;
+                // write!(f, "\n{context}")?;
 
                 Ok(())
             }

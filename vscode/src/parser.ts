@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 // }
 
 export interface Diagnostic {
-    level: vscode.DiagnosticSeverity
+    level: number
     message: string;
     line: number;
     column: number;
@@ -18,12 +18,10 @@ export interface Diagnostic {
 
 export interface ParseResult {
     success: boolean;
-    diagnositcs: Diagnostic[];
+    diagnostics: Diagnostic[];
 }
 
 export class Parser {
-    private static initialized = false;
-
     static async init() {
         init_panic();
     }

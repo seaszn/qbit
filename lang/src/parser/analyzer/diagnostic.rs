@@ -2,8 +2,9 @@ use crate::parser::ParseWarning;
 
 use super::ParseError;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum DiagnosticLevel {
     Error = 0,

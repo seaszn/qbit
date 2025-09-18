@@ -35,9 +35,6 @@
       }
     ]
   },
-  "activationEvents": [
-    "onLanguage:qbit"
-  ],
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

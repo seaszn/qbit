@@ -14,18 +14,20 @@ export class DiagnosticsProvider {
         }
 
         try {
-            const errors = await Parser.parse(document.getText());
+            const result = await Parser.parse(document.getText());
+            
+            console.log(result)
 
-            const diagnostics: vscode.Diagnostic[] = errors.diagnositcs.map(error => {
+            const diagnostics: vscode.Diagnostic[] = result.diagnostics.map(x => {
                 const range = new vscode.Range(
-                    new vscode.Position(Math.max(0, error.line - 1), Math.max(0, error.column - 1)),
-                    new vscode.Position(Math.max(0, error.line - 1), Math.max(0, error.column - 1 + error.length))
+                    new vscode.Position(Math.max(0, x.line - 1), Math.max(0, x.column - 1)),
+                    new vscode.Position(Math.max(0, x.line - 1), Math.max(0, x.column - 1 + x.length))
                 );
 
                 const diagnostic = new vscode.Diagnostic(
                     range,
-                    error.message,
-                    error.level
+                    x.message,
+                    x.level
                 );
 
                 diagnostic.source = 'qbit';

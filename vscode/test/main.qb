@@ -1,3 +1,5 @@
+let s = "";
+
 fn test() {
-    let ff = "";
+    let fF = "";
 }

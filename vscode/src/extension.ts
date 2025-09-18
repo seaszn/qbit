@@ -4,8 +4,6 @@ import { DiagnosticsProvider } from './diagnostics';
 import { CompletionProvider } from './completion';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Qbit language extension is now active!');
-
     const selector: vscode.DocumentSelector = {
         scheme: 'file',
         language: 'qbit'
