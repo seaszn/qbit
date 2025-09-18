@@ -49,15 +49,31 @@ impl<'a> Analyzer<'a> {
                     .into(),
                 );
             }
-            Stmt::Function { name, .. } if !name.is_snake_case() => {
-                self.diagnostics.push(
-                    ParseWarning::NamingConvention {
-                        message: format!("expected '{}'", name.to_snake_case()),
-                        span: span.clone(),
-                        context: ParseContext::from_span(self.source, &span),
-                    }
-                    .into(),
-                );
+            Stmt::Function { name, body, .. } => {
+                if !name.is_snake_case() {
+                    self.diagnostics.push(
+                        ParseWarning::NamingConvention {
+                            message: format!("expected '{}'", name.to_snake_case()),
+                            span: span.clone(),
+                            context: ParseContext::from_span(self.source, &span),
+                        }
+                        .into(),
+                    );
+                }
+
+                self.analyze(&body, span);
+            }
+            Stmt::Block { statements } => {
+                for stmt in statements{
+                    self.analyze(stmt, span);
+                }
+            },
+            Stmt::For { init, body, .. } => {
+                if let Some(stmt) = init{
+                    self.analyze(&stmt, span);
+                }
+
+                self.analyze(&body, span);
             }
             _ => (),
         };

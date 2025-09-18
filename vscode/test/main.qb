@@ -1,4 +1,4 @@
-let s = "";
+let Ss = "";
 
 fn test() {
     let fF = "";
