@@ -17,14 +17,14 @@
         "id": "qbit",
         "aliases": ["Qbit", "qbit"],
         "extensions": [".qb"],
-        "configuration": "./language-configuration.json"
+        "configuration": "./configuration.json"
       }
     ],
     "grammars": [
       {
         "language": "qbit",
         "scopeName": "source.qbit",
-        "path": "./syntaxes/qbit.tmLanguage.json"
+        "path": "./language.json"
       }
     ],
     "commands": [

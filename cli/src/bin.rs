@@ -6,7 +6,7 @@ fn main() -> Result<(), String> {
     match result {
         Ok(res) => {
             println!("{:#?}", res.statements());
-            println!("{:#?}", res.warnings());
+            println!("{:#?}", res.diagnositcs());
         },
         Err(err) => println!("{err:?}"),
     }

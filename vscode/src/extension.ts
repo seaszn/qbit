@@ -6,32 +6,32 @@ import { CompletionProvider } from './completion';
 export function activate(context: vscode.ExtensionContext) {
     console.log('Qbit language extension is now active!');
 
-    const qbitSelector: vscode.DocumentSelector = {
+    const selector: vscode.DocumentSelector = {
         scheme: 'file',
         language: 'qbit'
     };
 
-    const diagnosticsProvider = new DiagnosticsProvider();
+    const provider = new DiagnosticsProvider();
     
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.languageId === 'qbit') {
-                diagnosticsProvider.updateDiagnostics(event.document);
+                provider.update(event.document);
             }
         }),
         vscode.workspace.onDidOpenTextDocument(document => {
             if (document.languageId === 'qbit') {
-                diagnosticsProvider.updateDiagnostics(document);
+                provider.update(document);
             }
         }),
         vscode.workspace.onDidCloseTextDocument(document => {
             if (document.languageId === 'qbit') {
-                diagnosticsProvider.clearDiagnostics(document);
+                provider.clear(document);
             }
         }),
-        vscode.languages.registerHoverProvider(qbitSelector, new HoverProvider()),
+        vscode.languages.registerHoverProvider(selector, new HoverProvider()),
         vscode.languages.registerCompletionItemProvider(
-            qbitSelector,
+            selector,
             new CompletionProvider(),
             '.', '('
         ),

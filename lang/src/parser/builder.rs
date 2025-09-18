@@ -2,7 +2,7 @@ use logos::Logos;
 
 use crate::lexer::Token;
 
-use super::{DebugContext, ParseError, Parser, ParserConfig, TokenSpan};
+use super::{ParseContext, ParseError, Parser, ParserConfig, TokenSpan};
 
 pub struct ParserBuilder<'a> {
     source: &'a str,
@@ -41,7 +41,7 @@ impl<'a> ParserBuilder<'a> {
                     let span = lexer.span();
                     let invalid_text = &self.source[span.start..span.end.min(self.source.len())];
 
-                    let context = DebugContext::from_span(self.source, &span.clone());
+                    let context = ParseContext::from_span(self.source, &span.clone());
 
                     return Err(ParseError::BuildError {
                         message: "Invalid token".to_string(),

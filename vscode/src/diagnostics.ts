@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Parser, ParseError } from './parser';
+import { Parser } from './parser';
 
 export class DiagnosticsProvider {
     private diagnosticCollection: vscode.DiagnosticCollection;
@@ -8,14 +8,15 @@ export class DiagnosticsProvider {
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('qbit');
     }
 
-    async updateDiagnostics(document: vscode.TextDocument): Promise<void> {
+    async update(document: vscode.TextDocument): Promise<void> {
         if (document.languageId !== 'qbit') {
             return;
         }
 
         try {
-            const errors = await Parser.validateSyntax(document.getText());
-            const diagnostics: vscode.Diagnostic[] = errors.map(error => {
+            const errors = await Parser.parse(document.getText());
+
+            const diagnostics: vscode.Diagnostic[] = errors.diagnositcs.map(error => {
                 const range = new vscode.Range(
                     new vscode.Position(Math.max(0, error.line - 1), Math.max(0, error.column - 1)),
                     new vscode.Position(Math.max(0, error.line - 1), Math.max(0, error.column - 1 + error.length))
@@ -24,7 +25,7 @@ export class DiagnosticsProvider {
                 const diagnostic = new vscode.Diagnostic(
                     range,
                     error.message,
-                    vscode.DiagnosticSeverity.Error
+                    error.level
                 );
 
                 diagnostic.source = 'qbit';
@@ -38,7 +39,7 @@ export class DiagnosticsProvider {
         }
     }
 
-    clearDiagnostics(document: vscode.TextDocument): void {
+    clear(document: vscode.TextDocument): void {
         this.diagnosticCollection.delete(document.uri);
     }
 

@@ -1,6 +1,6 @@
 use crate::{
     lexer::Token,
-    parser::{DebugContext, Parse, ParseError, Parser},
+    parser::{ParseContext, Parse, ParseError, Parser},
 };
 
 use super::{
@@ -248,7 +248,7 @@ impl Expr {
                                     expected: Some("identifier".to_string()),
                                     found: format!("{:?}", token_span.token),
                                     span: token_span.span.clone(),
-                                    context: DebugContext::from_span(source, &token_span.span),
+                                    context: ParseContext::from_span(source, &token_span.span),
                                 });
                             }
                         },
@@ -333,7 +333,7 @@ impl Expr {
                     expected: Some("expression".to_string()),
                     found: format!("{:?}", token_span.token),
                     span: token_span.span.clone(),
-                    context: DebugContext::from_span(source, &token_span.span),
+                    context: ParseContext::from_span(source, &token_span.span),
                 }),
             },
             None => Err(parser.error("", Some("expression"))),

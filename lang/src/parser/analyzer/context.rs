@@ -1,14 +1,7 @@
-mod error;
-mod warning;
-
 use std::ops::Range;
 
-pub use error::*;
-pub use warning::*;
-
-
 #[derive(Debug, Clone)]
-pub struct DebugContext {
+pub struct ParseContext {
     pub line_number: usize,
     pub column_start: usize,
     pub column_end: usize,
@@ -16,7 +9,7 @@ pub struct DebugContext {
     pub span_in_line: Range<usize>,
 }
 
-impl DebugContext {
+impl ParseContext {
     pub fn from_span(source: &str, span: &Range<usize>) -> Self {
         let lines: Vec<&str> = source.lines().collect();
         let mut current_pos = 0;
@@ -51,7 +44,7 @@ impl DebugContext {
     }
 }
 
-impl std::fmt::Display for DebugContext {
+impl std::fmt::Display for ParseContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.span_in_line.is_empty() {
             true => write!(

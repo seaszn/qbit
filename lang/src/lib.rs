@@ -1,5 +1,5 @@
 mod error;
-mod vscode;
+mod wasm;
 
 pub mod lexer;
 pub mod parser;

@@ -1,6 +1,6 @@
 // lang/src/parser/warning.rs
 
-use super::DebugContext;
+use super::ParseContext;
 use std::ops::Range;
 use thiserror::Error;
 
@@ -10,27 +10,27 @@ pub enum ParseWarning {
     UnusedVariable {
         name: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Function declared but never used
     UnusedFunction {
         name: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Code after return statement
     UnreachableCode {
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Naming convention violation
     NamingConvention {
         message: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 }
 

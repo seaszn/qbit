@@ -1,7 +1,7 @@
 use std::ops::Range;
 use thiserror::Error;
 
-use crate::parser::DebugContext;
+use super::ParseContext;
 
 #[derive(Debug, Clone, Error)]
 pub enum ParseError {
@@ -10,37 +10,37 @@ pub enum ParseError {
         message: String,
         invalid_text: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
     /// Unexpected token during parsing
     UnexpectedToken {
         expected: Option<String>,
         found: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Unexpected end of file
     UnexpectedEof {
         expected: String,
         position: usize,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Invalid syntax
     InvalidSyntax {
         message: String,
         span: Range<usize>,
-        context: DebugContext,
+        context: ParseContext,
     },
 
     /// Missing required token
     MissingToken {
         expected: String,
         span: Range<usize>,
-        source_context: Option<DebugContext>,
+        context: ParseContext,
     },
-
+    
     /// Too much recursion (stack overflow prevention)
     TooMuchRecursion { max_depth: usize, position: usize },
 }
@@ -71,7 +71,7 @@ impl std::fmt::Display for ParseError {
                 }
 
                 write!(f, "\n{context}")?;
-
+                
                 Ok(())
             }
             ParseError::UnexpectedEof {
@@ -91,15 +91,10 @@ impl std::fmt::Display for ParseError {
                 Ok(())
             }
             ParseError::MissingToken {
-                expected,
-                source_context,
-                ..
+                expected, context, ..
             } => {
-                write!(f, "Missing {}", expected)?;
-
-                if let Some(context) = source_context {
-                    write!(f, "\n{context}")?;
-                }
+                write!(f, "Missing {expected}")?;
+                write!(f, "\n{context}")?;
 
                 Ok(())
             }
