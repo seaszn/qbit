@@ -34,54 +34,6 @@ export class Parser {
         return parse_code(source);
     }
 
-    // static async validateSyntax(source: string): Promise<ParseResult> {
-    //     try {
-    //         await this.init();
-
-    //         if (this.initialized) {
-    //             // Use your actual WASM validator
-    //             const errors = parse_syntax(source);
-    //             return Array.isArray(errors) ? errors : [];
-    //         }
-    //     } catch (error) {
-    //         console.error('WASM validation error:', error);
-    //     }
-
-    //     // Fallback to simple validation
-    //     return this.simpleValidation(source);
-    // }
-
-    // private static simpleValidation(source: string): ParseError[] {
-    //     const errors: ParseError[] = [];
-    //     const lines = source.split('\n');
-
-    //     lines.forEach((line, lineNumber) => {
-    //         const stringMatches = line.match(/"/g);
-    //         if (stringMatches && stringMatches.length % 2 !== 0) {
-    //             errors.push({
-    //                 message: 'Unterminated string literal',
-    //                 line: lineNumber + 1,
-    //                 column: line.lastIndexOf('"') + 1,
-    //                 length: line.length - line.lastIndexOf('"')
-    //             });
-    //         }
-
-    //         const openBraces = (line.match(/{/g) || []).length;
-    //         const closeBraces = (line.match(/}/g) || []).length;
-    //         if (openBraces !== closeBraces) {
-    //             const pos = line.indexOf(openBraces > closeBraces ? '{' : '}');
-    //             errors.push({
-    //                 message: 'Unmatched brace',
-    //                 line: lineNumber + 1,
-    //                 column: pos + 1,
-    //                 length: 1
-    //             });
-    //         }
-    //     });
-
-    //     return errors;
-    // }
-
     static getSymbolAtPosition(source: string, line: number, character: number): string | null {
         const lines = source.split('\n');
         if (line >= lines.length) return null;
