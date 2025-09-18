@@ -2,4 +2,4 @@ pkg
 dist
 node_modules
 
-*.vsix
+**/*.vsix
