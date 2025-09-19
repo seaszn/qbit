@@ -64,12 +64,12 @@ impl<'a> Analyzer<'a> {
                 self.analyze(&body, span);
             }
             Stmt::Block { statements } => {
-                for stmt in statements{
+                for stmt in statements {
                     self.analyze(stmt, span);
                 }
-            },
+            }
             Stmt::For { init, body, .. } => {
-                if let Some(stmt) = init{
+                if let Some(stmt) = init {
                     self.analyze(&stmt, span);
                 }
 
